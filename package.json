@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "google:auth": "node scripts/get-google-refresh-token.mjs",
-    "google:verify": "node scripts/verify-google.mjs"
+    "google:verify": "node scripts/verify-google.mjs",
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "googleapis": "^144.0.0",
