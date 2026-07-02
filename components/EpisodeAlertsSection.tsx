@@ -1,29 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import type { EpisodeAlert, ToastMessage } from "@/lib/types";
+import { MediaCard, MediaCardGrid } from "./MediaCard";
+import { SectionLabel } from "./SectionLabel";
 import { createToast } from "./Toast";
 
 interface EpisodeAlertsSectionProps {
   items: EpisodeAlert[];
   onToast: (toast: ToastMessage) => void;
   onDismiss: (id: string, rowIndex: number) => void;
-}
-
-function Poster({ url, title }: { url?: string | null; title: string }) {
-  if (!url) {
-    return <div className="alert-poster poster-placeholder">{title.slice(0, 2)}</div>;
-  }
-  return (
-    <Image
-      src={url}
-      alt=""
-      width={64}
-      height={96}
-      className="alert-poster"
-      unoptimized
-    />
-  );
 }
 
 export function EpisodeAlertsSection({ items, onToast, onDismiss }: EpisodeAlertsSectionProps) {
@@ -45,21 +30,24 @@ export function EpisodeAlertsSection({ items, onToast, onDismiss }: EpisodeAlert
   }
 
   return (
-    <section className="section-block">
-      <div className="section-label">New Episodes</div>
-      {items.map((item) => (
-        <div key={`${item.id}-${item.rowIndex}`} className="card alert-card">
-          <Poster url={item.posterUrl} title={item.show_title} />
-          <div>
-            <div className="card-title">{item.show_title || "Show update"}</div>
-            <div className="card-meta">{item.alert_date}</div>
-            {item.alert_text && <div className="card-desc">{item.alert_text}</div>}
-          </div>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => dismiss(item)}>
-            Dismiss
-          </button>
-        </div>
-      ))}
+    <section className="section-block section-block--alerts">
+      <SectionLabel label="New Episodes" variant="alerts" />
+      <MediaCardGrid>
+        {items.map((item) => (
+          <MediaCard
+            key={`${item.id}-${item.rowIndex}`}
+            title={item.show_title || "Show update"}
+            meta={item.alert_date}
+            description={item.alert_text}
+            posterUrl={item.posterUrl}
+            actions={
+              <button type="button" className="btn btn-ghost btn-xs" onClick={() => dismiss(item)}>
+                Dismiss
+              </button>
+            }
+          />
+        ))}
+      </MediaCardGrid>
     </section>
   );
 }

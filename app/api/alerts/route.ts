@@ -46,6 +46,7 @@ export async function PATCH(request: Request) {
     }
 
     invalidateCachedPrefix("alerts:");
+    invalidateCachedPrefix("bootstrap:");
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Update failed";

@@ -9,7 +9,7 @@ export function getCached<T>(key: string): T | null {
   return entry.data as T;
 }
 
-export function setCached(key: string, data: unknown, ttlMs = 30_000): void {
+export function setCached(key: string, data: unknown, ttlMs = 300_000): void {
   cache.set(key, { data, expires: Date.now() + ttlMs });
 }
 

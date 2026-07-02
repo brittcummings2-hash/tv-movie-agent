@@ -3,9 +3,10 @@
  * Run: npm run google:auth
  */
 import { createServer } from "http";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { spawnSync } from "child_process";
 import { google } from "googleapis";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,31 @@ function loadEnvFile() {
 }
 
 loadEnvFile();
+
+function saveRefreshToken(refreshToken) {
+  if (!refreshToken) {
+    console.error("Google did not return a refresh token. Try again with prompt=consent.");
+    return;
+  }
+
+  let content = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
+  if (/^GOOGLE_REFRESH_TOKEN=/m.test(content)) {
+    content = content.replace(/^GOOGLE_REFRESH_TOKEN=.*$/m, `GOOGLE_REFRESH_TOKEN=${refreshToken}`);
+  } else {
+    content = `${content.trim()}\nGOOGLE_REFRESH_TOKEN=${refreshToken}\n`;
+  }
+  writeFileSync(envPath, content);
+  console.log("\nSaved GOOGLE_REFRESH_TOKEN to .env.local");
+
+  console.log("\nPushing token to Vercel and redeploying...");
+  const push = spawnSync("node", ["scripts/google-push-token.mjs"], {
+    cwd: root,
+    stdio: "inherit",
+  });
+  if (push.status !== 0) {
+    console.log("\nVercel deploy failed. Run manually: npm run google:deploy");
+  }
+}
 
 const clientId = process.env.GOOGLE_CLIENT_ID;
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -69,11 +95,10 @@ const server = createServer(async (req, res) => {
   try {
     const { tokens } = await oauth2.getToken(code);
     res.writeHead(200, { "Content-Type": "text/html" });
-    res.end("<h1>Success</h1><p>Return to the terminal.</p>");
+    res.end("<h1>Success</h1><p>Return to the terminal — updating Vercel now.</p>");
 
-    console.log("\nAdd to .env.local:\n");
-    console.log(`GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}`);
-    console.log("\nRestart npm run dev.\n");
+    console.log(`\nGOOGLE_REFRESH_TOKEN=${tokens.refresh_token}`);
+    saveRefreshToken(tokens.refresh_token);
   } catch (err) {
     res.writeHead(500, { "Content-Type": "text/html" });
     res.end(`<h1>Token exchange failed</h1><p>${String(err)}</p>`);
@@ -86,4 +111,14 @@ const server = createServer(async (req, res) => {
 
 server.listen(3333, () => {
   console.log("Waiting for redirect on http://localhost:3333 ...\n");
+});
+
+server.on("error", (err) => {
+  if (err && "code" in err && err.code === "EADDRINUSE") {
+    console.error("\nPort 3333 is already in use.");
+    console.error("Either open the auth URL above in your browser (if a server is already running),");
+    console.error("or free the port: lsof -ti :3333 | xargs kill -9\n");
+    process.exit(1);
+  }
+  throw err;
 });

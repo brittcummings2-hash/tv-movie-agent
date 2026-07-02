@@ -9,6 +9,7 @@
     "lint": "next lint",
     "google:auth": "node scripts/get-google-refresh-token.mjs",
     "google:verify": "node scripts/verify-google.mjs",
+    "google:deploy": "node scripts/google-push-token.mjs",
     "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {

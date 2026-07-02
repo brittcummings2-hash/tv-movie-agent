@@ -4,7 +4,8 @@ import type {
   Recommendation,
   UserRating,
 } from "./types";
-import { inferMediaKind, lookupTmdbImages } from "./tmdb";
+import { inferMediaKind, resolveTmdbTitle } from "./tmdb";
+import { normalizeWatchStatus } from "./watch-stages";
 
 export function parseJsonArray(value: string): string[] {
   if (!value?.trim()) return [];
@@ -20,20 +21,52 @@ export function parseBool(value: string): boolean {
   return value.trim().toUpperCase() === "TRUE";
 }
 
+export function parseRating(value: string | number): number {
+  if (typeof value === "number") {
+    return clampRating(value);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+
+  const fraction = trimmed.match(/^(\d+(?:\.\d+)?)\s*\/\s*5$/);
+  if (fraction) return clampRating(Number(fraction[1]));
+
+  const stars = trimmed.match(/^(\d+(?:\.\d+)?)\s*stars?$/i);
+  if (stars) return clampRating(Number(stars[1]));
+
+  return clampRating(Number(trimmed));
+}
+
+function clampRating(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(5, Math.round(value)));
+}
+
 export function mapUserRatings(rows: Record<string, string | number>[]): UserRating[] {
   return rows.map((row) => ({
     id: String(row.id ?? ""),
     rowIndex: Number(row._sheet_row ?? 0),
     show_title: String(row.show_title ?? ""),
-    rating: Number(row.rating ?? 0),
+    rating: parseRating(row.rating ?? 0),
     release_date: String(row.release_date ?? ""),
     platform: String(row.platform ?? ""),
-    watch_status: String(row.watch_status ?? ""),
+    watch_status: normalizeWatchStatus(row.watch_status),
     why_reasons: String(row.why_reasons ?? ""),
     comments: String(row.comments ?? ""),
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
   }));
+}
+
+/** Accept/dismiss briefly wrote to why_options_negative before user_action column was fixed. */
+function resolveRecommendationUserAction(row: Record<string, string | number>): string {
+  const action = String(row.user_action ?? "").trim();
+  if (action) return action;
+
+  const misplaced = String(row.why_options_negative ?? "").trim().toLowerCase();
+  if (misplaced === "accept" || misplaced === "dismiss") return misplaced;
+
+  return "";
 }
 
 export function mapRecommendations(rows: Record<string, string | number>[]): Recommendation[] {
@@ -54,7 +87,7 @@ export function mapRecommendations(rows: Record<string, string | number>[]): Rec
     buzz_source: String(row.buzz_source ?? ""),
     why_options_positive: String(row.why_options_positive ?? ""),
     why_options_negative: String(row.why_options_negative ?? ""),
-    user_action: String(row.user_action ?? ""),
+    user_action: resolveRecommendationUserAction(row),
     user_rating: String(row.user_rating ?? ""),
     user_reasons: String(row.user_reasons ?? ""),
     user_comments: String(row.user_comments ?? ""),
@@ -107,8 +140,20 @@ export function mapEpisodeAlerts(rows: Record<string, string | number>[]): Episo
 export async function attachRatingImages(items: UserRating[]): Promise<UserRating[]> {
   return Promise.all(
     items.map(async (item) => {
-      const images = await lookupTmdbImages(item.show_title, "tv");
-      return { ...item, posterUrl: images.posterUrl };
+      const resolved = await resolveTmdbTitle(item.show_title, undefined, {
+        releaseDate: item.release_date,
+        skipPlatform: Boolean(item.platform.trim()),
+      });
+      return {
+        ...item,
+        posterUrl: resolved?.posterUrl ?? null,
+        overview: resolved?.overview?.trim() || null,
+        episode_count: resolved?.episodeCount ?? null,
+        release_date: item.release_date || resolved?.releaseDate || "",
+        platform: item.platform || resolved?.platform || "",
+        next_episode_air_date: resolved?.nextEpisodeAirDate ?? null,
+        series_status: resolved?.seriesStatus ?? null,
+      };
     })
   );
 }
@@ -117,8 +162,15 @@ export async function attachRecommendationImages(items: Recommendation[]): Promi
   return Promise.all(
     items.map(async (item) => {
       const kind = inferMediaKind(item.type);
-      const images = await lookupTmdbImages(item.title, kind);
-      return { ...item, posterUrl: images.posterUrl, heroUrl: images.heroUrl };
+      const resolved = await resolveTmdbTitle(item.title, kind, {
+        releaseDate: item.release_date,
+        skipPlatform: true,
+      });
+      return {
+        ...item,
+        posterUrl: resolved?.posterUrl ?? null,
+        heroUrl: resolved?.heroUrl ?? null,
+      };
     })
   );
 }
@@ -126,8 +178,8 @@ export async function attachRecommendationImages(items: Recommendation[]): Promi
 export async function attachAlertImages(items: EpisodeAlert[]): Promise<EpisodeAlert[]> {
   return Promise.all(
     items.map(async (item) => {
-      const images = await lookupTmdbImages(item.show_title, "tv");
-      return { ...item, posterUrl: images.posterUrl };
+      const resolved = await resolveTmdbTitle(item.show_title, "tv", { skipPlatform: true });
+      return { ...item, posterUrl: resolved?.posterUrl ?? null };
     })
   );
 }

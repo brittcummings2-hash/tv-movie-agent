@@ -1,37 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { HeaderSearch } from "./HeaderSearch";
 
-function greeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
-
-export type AppTab = "upnext" | "watched";
+export type AppTab = "watching" | "recommended" | "watched";
 
 const TABS: { id: AppTab; label: string }[] = [
-  { id: "upnext", label: "Up Next" },
+  { id: "watching", label: "In Progress" },
+  { id: "recommended", label: "Recommended" },
   { id: "watched", label: "Watched" },
 ];
 
 interface NavProps {
   activeTab: AppTab;
   onTabChange: (tab: AppTab) => void;
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  onAddClick: () => void;
 }
 
-export function Nav({ activeTab, onTabChange }: NavProps) {
-  const [greetingLabel] = useState(greeting);
+function AddIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
+export function Nav({ activeTab, onTabChange, searchQuery, onSearchChange, onAddClick }: NavProps) {
   return (
     <header className="site-header">
-      <div className="header-greeting">
-        <span className="header-greeting-text">
-          {greetingLabel}, <span style={{ color: "var(--coral)" }}>Brittany</span>
-          <span style={{ color: "var(--coral)" }}>.</span>
-        </span>
-      </div>
+      <h1 className="site-title">
+        TV Tracker<span className="site-title-dot">.</span>
+      </h1>
 
       <div className="header-tabs" role="tablist">
         {TABS.map((tab) => (
@@ -48,7 +48,12 @@ export function Nav({ activeTab, onTabChange }: NavProps) {
         ))}
       </div>
 
-      <div className="header-actions" />
+      <div className="header-actions">
+        <button type="button" className="header-add-toggle" onClick={onAddClick} aria-label="Add a show">
+          <AddIcon />
+        </button>
+        <HeaderSearch value={searchQuery} onChange={onSearchChange} />
+      </div>
     </header>
   );
 }

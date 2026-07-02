@@ -17,6 +17,7 @@ npm run dev
 - `GOOGLE_SHEET_ID` — Brittany TV Agent Database
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`
 - `TMDB_API_KEY` — posters and hero images
+- `GEMINI_API_KEY` — optional; parses “I watched X, 5 stars” for quick-add
 - `PORTAL_PASSWORD` — optional login gate for deploy
 
 ## Deploy

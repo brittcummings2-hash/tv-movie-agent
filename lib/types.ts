@@ -3,9 +3,11 @@ export const SHEET_TABS = {
   RECOMMENDATIONS: "recommendations",
   DAILY_DIGEST: "daily_digest",
   EPISODE_ALERTS: "episode_alerts",
+  SETTINGS: "settings",
+  SPARK_QUEUE: "spark_queue",
 } as const;
 
-export type WatchStatus = "watched" | "dnf" | string;
+export type WatchStatus = "watched" | "watching" | "want_to_watch" | "dnf" | string;
 
 export interface UserRating {
   id: string;
@@ -20,6 +22,13 @@ export interface UserRating {
   created_at: string;
   updated_at: string;
   posterUrl?: string | null;
+  overview?: string | null;
+  genres?: string[];
+  media_type?: string;
+  episode_count?: number | null;
+  tmdb_rating?: number | null;
+  next_episode_air_date?: string | null;
+  series_status?: string | null;
 }
 
 export interface Recommendation {
