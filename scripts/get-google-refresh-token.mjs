@@ -41,6 +41,9 @@ function saveRefreshToken(refreshToken) {
     content = `${content.trim()}\nGOOGLE_REFRESH_TOKEN=${refreshToken}\n`;
   }
   writeFileSync(envPath, content);
+  // Overwrite the stale token loaded at startup so the child push/verify
+  // scripts (which inherit process.env) see the new one, not the old one.
+  process.env.GOOGLE_REFRESH_TOKEN = refreshToken;
   console.log("\nSaved GOOGLE_REFRESH_TOKEN to .env.local");
 
   console.log("\nPushing token to Vercel and redeploying...");
