@@ -4,6 +4,8 @@ import { isPortalAuthEnabled, isValidSessionToken, PORTAL_SESSION_COOKIE } from 
 
 function isPublicPath(pathname: string): boolean {
   if (pathname === "/login" || pathname.startsWith("/api/auth/")) return true;
+  // Cron-hit endpoints do their own auth (CRON_SECRET or portal session).
+  if (pathname === "/api/health" || pathname === "/api/backup") return true;
   return false;
 }
 
