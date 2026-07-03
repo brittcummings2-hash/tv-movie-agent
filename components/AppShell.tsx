@@ -17,6 +17,7 @@ import { AddShowModal } from "./AddShowModal";
 import type { LibraryEntryDraft } from "./EditLibraryEntryModal";
 import { FinishWatchedModal, type FinishWatchedPayload } from "./FinishWatchedModal";
 import { StatusTabView } from "./StatusTabView";
+import { StatsView } from "./StatsView";
 import { Nav } from "./Nav";
 import { ToastContainer, createToast } from "./Toast";
 import { RecommendedView } from "./RecommendedView";
@@ -328,7 +329,7 @@ export function AppShell() {
     const trimmed = searchQuery.trim();
     if (!trimmed) return;
 
-    const matchTab = findSearchResultTab(activeTab, trimmed, {
+    const matchTab = findSearchResultTab(activeTab === "stats" ? "watching" : activeTab, trimmed, {
       library,
       activeRecommendations,
       alerts,
@@ -718,6 +719,9 @@ export function AppShell() {
                 onUpdate={updateLibraryEntry}
                 onDelete={deleteLibraryEntry}
               />
+            </div>
+            <div className={activeTab === "stats" ? "portal-panel" : "portal-panel portal-panel-hidden"}>
+              <StatsView library={library} />
             </div>
           </>
         )}

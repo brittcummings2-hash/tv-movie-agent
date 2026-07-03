@@ -9,7 +9,7 @@ import { LibrarySection } from "./LibrarySection";
 import type { LibraryEntryDraft } from "./EditLibraryEntryModal";
 
 interface StatusTabViewProps {
-  tab: Exclude<AppTab, "recommended">;
+  tab: Exclude<AppTab, "recommended" | "stats">;
   items: UserRating[];
   recommendations: Recommendation[];
   alerts?: EpisodeAlert[];

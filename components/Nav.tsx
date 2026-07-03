@@ -2,12 +2,13 @@
 
 import { HeaderSearch } from "./HeaderSearch";
 
-export type AppTab = "watching" | "recommended" | "watched";
+export type AppTab = "watching" | "recommended" | "watched" | "stats";
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: "watching", label: "In Progress" },
   { id: "recommended", label: "Recommended" },
   { id: "watched", label: "Watched" },
+  { id: "stats", label: "Stats" },
 ];
 
 interface NavProps {
