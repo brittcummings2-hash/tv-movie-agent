@@ -4,6 +4,15 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "TV Agent",
   description: "Track what you've watched and what Spark recommends next",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "TV Tracker",
+  },
 };
 
 export const viewport: Viewport = {

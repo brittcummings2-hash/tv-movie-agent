@@ -6,6 +6,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/login" || pathname.startsWith("/api/auth/")) return true;
   // Cron-hit endpoints do their own auth (CRON_SECRET or portal session).
   if (pathname === "/api/health" || pathname === "/api/backup") return true;
+  // PWA assets must load before login (install prompt, home-screen icon).
+  if (pathname === "/manifest.webmanifest" || pathname.startsWith("/icons/")) return true;
   return false;
 }
 
