@@ -11,6 +11,27 @@ async function getSheetsClient(): Promise<sheets_v4.Sheets> {
   return sheetsClient;
 }
 
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503]);
+
+function isRetryable(error: unknown): boolean {
+  const err = error as { code?: number | string; response?: { status?: number } };
+  const status = Number(err?.response?.status ?? err?.code);
+  return RETRYABLE_STATUS.has(status);
+}
+
+/** Sheets occasionally rate-limits or hiccups; retry those instead of failing the request. */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const delays = [500, 1500];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt >= delays.length || !isRetryable(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
+}
+
 function headerToKey(header: string): string {
   return header.toString().trim().toLowerCase().replace(/\s+/g, "_");
 }
@@ -29,10 +50,12 @@ export async function getSheetRows(tabName: string): Promise<Record<string, stri
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: getSheetRange(tabName),
-  });
+  const response = await withRetry(() =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: getSheetRange(tabName),
+    })
+  );
 
   const data = response.data.values ?? [];
   if (data.length < 2) return [];
@@ -59,10 +82,12 @@ async function findRowIndex(tabName: string, idColumn: number, id: string): Prom
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${tabName}'`,
-  });
+  const response = await withRetry(() =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${tabName}'`,
+    })
+  );
 
   const data = response.data.values ?? [];
   for (let i = 1; i < data.length; i++) {
@@ -116,12 +141,14 @@ export async function updateSheetField(
   const spreadsheetId = getSheetId();
   const colLetter = columnIndexToLetter(colIdx);
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `'${tabName}'!${colLetter}${rowIndex}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[value]] },
-  });
+  await withRetry(() =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${tabName}'!${colLetter}${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[value]] },
+    })
+  );
 
   return { status: "success" };
 }
@@ -140,12 +167,14 @@ export async function updateSheetFieldByRow(
   const spreadsheetId = getSheetId();
   const colLetter = columnIndexToLetter(colIdx);
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `'${tabName}'!${colLetter}${rowIndex}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[value]] },
-  });
+  await withRetry(() =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${tabName}'!${colLetter}${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [[value]] },
+    })
+  );
 
   return { status: "success" };
 }
@@ -154,10 +183,12 @@ async function findNextUserRatingRowIndex(): Promise<number> {
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${SHEET_TABS.USER_RATINGS}'!A2:J`,
-  });
+  const response = await withRetry(() =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${SHEET_TABS.USER_RATINGS}'!A2:J`,
+    })
+  );
 
   const values = response.data.values ?? [];
   for (let i = 0; i < values.length; i++) {
@@ -184,27 +215,29 @@ export async function appendUserRating(entry: {
   const today = new Date().toISOString().slice(0, 10);
   const rowIndex = await findNextUserRatingRowIndex();
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:J${rowIndex}`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [
-        [
-          id,
-          entry.show_title,
-          String(entry.rating),
-          entry.release_date,
-          entry.platform,
-          entry.watch_status,
-          entry.why_reasons ?? "",
-          entry.comments,
-          today,
-          today,
+  await withRetry(() =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:J${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [
+          [
+            id,
+            entry.show_title,
+            String(entry.rating),
+            entry.release_date,
+            entry.platform,
+            entry.watch_status,
+            entry.why_reasons ?? "",
+            entry.comments,
+            today,
+            today,
+          ],
         ],
-      ],
-    },
-  });
+      },
+    })
+  );
 
   return { status: "success", id };
 }
@@ -229,24 +262,27 @@ export async function updateUserRating(
   const spreadsheetId = getSheetId();
   const today = new Date().toISOString().slice(0, 10);
 
+  const data: sheets_v4.Schema$ValueRange[] = [];
   for (const [field, value] of Object.entries(fields)) {
     const colIdx = columns[field];
     if (!colIdx || value == null) continue;
     const colLetter = columnIndexToLetter(colIdx);
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
+    data.push({
       range: `'${SHEET_TABS.USER_RATINGS}'!${colLetter}${rowIndex}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[String(value)]] },
+      values: [[String(value)]],
     });
   }
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
+  data.push({
     range: `'${SHEET_TABS.USER_RATINGS}'!J${rowIndex}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[today]] },
+    values: [[today]],
   });
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: "RAW", data },
+    })
+  );
 
   return { status: "success" };
 }
@@ -258,10 +294,12 @@ export async function deleteUserRating(id: string): Promise<{ status: "success" 
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
 
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId,
-    range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:J${rowIndex}`,
-  });
+  await withRetry(() =>
+    sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:J${rowIndex}`,
+    })
+  );
 
   return { status: "success" };
 }
@@ -286,10 +324,12 @@ async function findNextRecommendationRowIndex(): Promise<number> {
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${SHEET_TABS.RECOMMENDATIONS}'!A2:T`,
-  });
+  const response = await withRetry(() =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${SHEET_TABS.RECOMMENDATIONS}'!A2:T`,
+    })
+  );
 
   const values = response.data.values ?? [];
   for (let i = 0; i < values.length; i++) {
@@ -320,47 +360,45 @@ export async function appendRecommendations(
   const existingRows = await getSheetRows(SHEET_TABS.RECOMMENDATIONS);
   const existingIds = existingRows.map((row) => String(row.id ?? ""));
   const today = new Date().toISOString().slice(0, 10);
-  let rowIndex = await findNextRecommendationRowIndex();
+  const rowIndex = await findNextRecommendationRowIndex();
   const ids: string[] = [];
+  const values: string[][] = [];
 
   for (const entry of entries) {
     const id = nextRecommendationId([...existingIds, ...ids]);
     ids.push(id);
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `'${SHEET_TABS.RECOMMENDATIONS}'!A${rowIndex}:T${rowIndex}`,
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [
-          [
-            id,
-            today,
-            entry.title,
-            entry.release_date,
-            entry.platform,
-            entry.type,
-            String(entry.fit_score),
-            entry.available_now ? "TRUE" : "FALSE",
-            entry.why_she_will_love_it,
-            entry.the_hook,
-            JSON.stringify(entry.comp_shows),
-            entry.caution,
-            entry.buzz_source,
-            entry.why_options_positive,
-            entry.why_options_negative,
-            options?.userAction ?? "",
-            "",
-            "",
-            "",
-            today,
-          ],
-        ],
-      },
-    });
-
-    rowIndex += 1;
+    values.push([
+      id,
+      today,
+      entry.title,
+      entry.release_date,
+      entry.platform,
+      entry.type,
+      String(entry.fit_score),
+      entry.available_now ? "TRUE" : "FALSE",
+      entry.why_she_will_love_it,
+      entry.the_hook,
+      JSON.stringify(entry.comp_shows),
+      entry.caution,
+      entry.buzz_source,
+      entry.why_options_positive,
+      entry.why_options_negative,
+      options?.userAction ?? "",
+      "",
+      "",
+      "",
+      today,
+    ]);
   }
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${SHEET_TABS.RECOMMENDATIONS}'!A${rowIndex}:T${rowIndex + values.length - 1}`,
+      valueInputOption: "RAW",
+      requestBody: { values },
+    })
+  );
 
   return { ids };
 }
