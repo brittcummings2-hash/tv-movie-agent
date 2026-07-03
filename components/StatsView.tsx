@@ -38,7 +38,9 @@ function BarList({ title, rows }: { title: string; rows: BarRow[] }) {
             <span className="stats-bar-track">
               <span
                 className="stats-bar-fill"
-                style={{ width: `${Math.max(4, (row.count / max) * 100)}%` }}
+                style={{
+                  width: row.count === 0 ? "0%" : `${Math.max(4, (row.count / max) * 100)}%`,
+                }}
               />
             </span>
             <span className="stats-bar-value">{row.count}</span>
