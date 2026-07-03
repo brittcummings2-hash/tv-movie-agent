@@ -417,6 +417,32 @@ export function AppShell() {
     }
   }
 
+  async function updateProgress(item: UserRating, season: number, episode: number) {
+    // Optimistic — flip the numbers immediately, roll back on failure.
+    const previous = { current_season: item.current_season, current_episode: item.current_episode };
+    setLibrary((prev) =>
+      prev.map((row) =>
+        row.id === item.id ? { ...row, current_season: season, current_episode: episode } : row
+      )
+    );
+    try {
+      const res = await fetch("/api/watched", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          fields: { current_season: season, current_episode: episode },
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+    } catch {
+      setLibrary((prev) =>
+        prev.map((row) => (row.id === item.id ? { ...row, ...previous } : row))
+      );
+      handleToast(createToast("error", "Could not save episode progress"));
+    }
+  }
+
   async function rateShow(item: UserRating, rating: number) {
     try {
       const savedItem = await persistLibraryItem(item, { rating });
@@ -645,6 +671,7 @@ export function AppShell() {
                 onUpdate={updateLibraryEntry}
                 onDelete={deleteLibraryEntry}
                 onProfileShow={profileWithSpark}
+                onUpdateProgress={updateProgress}
               />
             </div>
             <div className={activeTab === "recommended" ? "portal-panel" : "portal-panel portal-panel-hidden"}>

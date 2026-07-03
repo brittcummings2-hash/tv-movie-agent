@@ -38,7 +38,7 @@ function headerToKey(header: string): string {
 
 function getSheetRange(tabName: string): string {
   if (tabName === SHEET_TABS.USER_RATINGS) {
-    return `'${tabName}'!A:J`;
+    return `'${tabName}'!A:L`;
   }
   if (tabName === SHEET_TABS.RECOMMENDATIONS) {
     return `'${tabName}'!A:T`;
@@ -107,6 +107,8 @@ const TAB_COLUMNS: Record<string, Record<string, number>> = {
     watch_status: 6,
     why_reasons: 7,
     comments: 8,
+    current_season: 11,
+    current_episode: 12,
   },
   [SHEET_TABS.RECOMMENDATIONS]: {
     user_action: 16,
@@ -273,6 +275,34 @@ export async function appendUserRating(entry: {
   return { status: "success", id };
 }
 
+let progressHeadersEnsured = false;
+
+/** The current_season/current_episode columns were added later — create their headers on demand. */
+async function ensureProgressHeaders(): Promise<void> {
+  if (progressHeadersEnsured) return;
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSheetId();
+
+  const response = await withRetry(() =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${SHEET_TABS.USER_RATINGS}'!K1:L1`,
+    })
+  );
+  const row = response.data.values?.[0] ?? [];
+  if (row[0] !== "current_season" || row[1] !== "current_episode") {
+    await withRetry(() =>
+      sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${SHEET_TABS.USER_RATINGS}'!K1:L1`,
+        valueInputOption: "RAW",
+        requestBody: { values: [["current_season", "current_episode"]] },
+      })
+    );
+  }
+  progressHeadersEnsured = true;
+}
+
 export async function updateUserRating(
   id: string,
   fields: Partial<{
@@ -283,8 +313,13 @@ export async function updateUserRating(
     watch_status: string;
     why_reasons: string;
     comments: string;
+    current_season: number;
+    current_episode: number;
   }>
 ): Promise<{ status: "success" | "error" }> {
+  if (fields.current_season != null || fields.current_episode != null) {
+    await ensureProgressHeaders();
+  }
   const rowIndex = await findRowIndex(SHEET_TABS.USER_RATINGS, 0, id);
   if (rowIndex == null) return { status: "error" };
 
@@ -328,7 +363,7 @@ export async function deleteUserRating(id: string): Promise<{ status: "success" 
   await withRetry(() =>
     sheets.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:J${rowIndex}`,
+      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:L${rowIndex}`,
     })
   );
 

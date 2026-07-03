@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { parseWatchMessage } from "@/lib/gemini";
 import { attachRatingImages, mapUserRatings } from "@/lib/mappers";
 import { getCached, invalidateCachedPrefix, setCached } from "@/lib/sheet-cache";
-import { appendUserRating, deleteUserRating, getSheetRows, updateSheetField, updateUserRating } from "@/lib/sheets";
+import { appendUserRating, deleteUserRating, getSheetRows, updateUserRating } from "@/lib/sheets";
 import { enrichStructuredEntry, type StructuredWatchEntry } from "@/lib/structured-entry";
 import { SHEET_TABS } from "@/lib/types";
 import { enrichWatchEntry } from "@/lib/watch-entry";
@@ -177,31 +177,45 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const id = String(body.id ?? "");
-    const field = String(body.field ?? "");
-    const value = String(body.val ?? body.value ?? "");
 
-    if (!id || !field) {
-      return NextResponse.json({ error: "Missing id or field" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    const allowed = ["rating", "watch_status", "comments", "why_reasons", "show_title", "release_date", "platform"];
-    if (!allowed.includes(field)) {
-      return NextResponse.json({ error: "Field not allowed" }, { status: 400 });
+    const allowed = [
+      "rating",
+      "watch_status",
+      "comments",
+      "why_reasons",
+      "show_title",
+      "release_date",
+      "platform",
+      "current_season",
+      "current_episode",
+    ];
+    const numericFields = new Set(["rating", "current_season", "current_episode"]);
+
+    // Multi-field form: { id, fields: { current_season, current_episode, ... } }
+    const rawFields: Record<string, unknown> =
+      body.fields && typeof body.fields === "object"
+        ? (body.fields as Record<string, unknown>)
+        : body.field
+          ? { [String(body.field)]: body.val ?? body.value ?? "" }
+          : {};
+
+    if (Object.keys(rawFields).length === 0) {
+      return NextResponse.json({ error: "Missing field" }, { status: 400 });
     }
 
-    const updates: Partial<{
-      rating: number;
-      watch_status: string;
-      comments: string;
-      why_reasons: string;
-      show_title: string;
-      release_date: string;
-      platform: string;
-    }> = {
-      [field]: field === "rating" ? Number(value) : value,
-    };
+    const updates: Record<string, string | number> = {};
+    for (const [field, value] of Object.entries(rawFields)) {
+      if (!allowed.includes(field)) {
+        return NextResponse.json({ error: "Field not allowed" }, { status: 400 });
+      }
+      updates[field] = numericFields.has(field) ? Number(value) : String(value ?? "");
+    }
 
-    const result = await updateUserRating(id, updates);
+    const result = await updateUserRating(id, updates as Parameters<typeof updateUserRating>[1]);
     if (result.status === "error") {
       return NextResponse.json({ error: "Update failed" }, { status: 404 });
     }

@@ -21,6 +21,9 @@ export interface UserRating {
   comments: string;
   created_at: string;
   updated_at: string;
+  /** 0 = not tracking progress */
+  current_season: number;
+  current_episode: number;
   posterUrl?: string | null;
   overview?: string | null;
   genres?: string[];

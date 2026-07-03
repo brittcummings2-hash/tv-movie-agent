@@ -55,6 +55,8 @@ export function mapUserRatings(rows: Record<string, string | number>[]): UserRat
     comments: String(row.comments ?? ""),
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
+    current_season: Math.max(0, Math.floor(Number(row.current_season ?? 0)) || 0),
+    current_episode: Math.max(0, Math.floor(Number(row.current_episode ?? 0)) || 0),
   }));
 }
 

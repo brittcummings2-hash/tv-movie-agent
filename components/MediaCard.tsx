@@ -20,6 +20,65 @@ interface MediaCardProps {
   episodeAlert?: { text: string; onDismiss: () => void } | null;
   statusLine?: { label: string; tone: "scheduled" | "waiting" | "ended" } | null;
   trailerUrl?: string | null;
+  progress?: {
+    season: number;
+    episode: number;
+    onChange: (season: number, episode: number) => void;
+  } | null;
+}
+
+function ProgressControl({
+  season,
+  episode,
+  onChange,
+}: {
+  season: number;
+  episode: number;
+  onChange: (season: number, episode: number) => void;
+}) {
+  if (season < 1) {
+    return (
+      <div className="media-card-progress">
+        <button type="button" className="progress-start" onClick={() => onChange(1, 1)}>
+          + Track episode progress
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="media-card-progress">
+      <span className="progress-label">
+        S{season} · E{episode}
+      </span>
+      <button
+        type="button"
+        className="progress-btn"
+        aria-label="Previous episode"
+        onClick={() => (episode > 1 ? onChange(season, episode - 1) : undefined)}
+        disabled={episode <= 1}
+      >
+        −
+      </button>
+      <button
+        type="button"
+        className="progress-btn"
+        aria-label="Next episode"
+        onClick={() => onChange(season, episode + 1)}
+      >
+        +
+      </button>
+      <button
+        type="button"
+        className="progress-btn progress-btn-season"
+        aria-label="Start next season"
+        title="Start next season"
+        onClick={() => onChange(season + 1, 1)}
+      >
+        S{season + 1} →
+      </button>
+    </div>
+  );
 }
 
 function Poster({ url, title }: { url?: string | null; title: string }) {
@@ -52,6 +111,7 @@ export function MediaCard({
   episodeAlert,
   statusLine,
   trailerUrl,
+  progress,
 }: MediaCardProps) {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const visibleTags = tags.map((tag) => tag.trim()).filter(Boolean);
@@ -103,6 +163,13 @@ export function MediaCard({
           <div className={`media-card-nextep media-card-nextep--${statusLine.tone}`}>
             {statusLine.label}
           </div>
+        )}
+        {progress && (
+          <ProgressControl
+            season={progress.season}
+            episode={progress.episode}
+            onChange={progress.onChange}
+          />
         )}
         {visibleTags.length > 0 && (
           <div className="tag-row">

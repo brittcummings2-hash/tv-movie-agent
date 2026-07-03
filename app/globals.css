@@ -1264,3 +1264,59 @@ button {
 .card-trailer-link:hover {
   text-decoration: underline;
 }
+
+/* Episode progress stepper on In Progress cards */
+.media-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  min-width: 58px;
+}
+
+.progress-btn {
+  border: 1px solid var(--border-medium);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.progress-btn:hover:not(:disabled) {
+  border-color: var(--coral);
+  color: var(--coral);
+}
+
+.progress-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.progress-btn-season {
+  margin-left: 2px;
+}
+
+.progress-start {
+  border: 1px dashed var(--border-medium);
+  background: none;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.progress-start:hover {
+  border-color: var(--coral);
+  color: var(--coral);
+}

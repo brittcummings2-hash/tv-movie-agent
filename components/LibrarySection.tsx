@@ -29,6 +29,7 @@ interface LibrarySectionProps {
   onUpdate?: (item: UserRating, draft: LibraryEntryDraft) => Promise<void>;
   onDelete?: (item: UserRating) => Promise<void>;
   onProfileShow?: (item: UserRating) => void;
+  onUpdateProgress?: (item: UserRating, season: number, episode: number) => void;
 }
 
 export function LibrarySection({
@@ -50,6 +51,7 @@ export function LibrarySection({
   onUpdate,
   onDelete,
   onProfileShow,
+  onUpdateProgress,
 }: LibrarySectionProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -89,6 +91,17 @@ export function LibrarySection({
           const statusLine = showNextEpisode
             ? formatNextEpisode(item.next_episode_air_date, item.series_status)
             : null;
+          // Episode progress only makes sense on TV shows she's actively watching.
+          const isMovie = (item.media_type ?? "").toLowerCase() === "movie";
+          const progress =
+            onUpdateProgress && item.watch_status.toLowerCase() === "watching" && !isMovie
+              ? {
+                  season: item.current_season,
+                  episode: item.current_episode,
+                  onChange: (season: number, episode: number) =>
+                    onUpdateProgress(item, season, episode),
+                }
+              : null;
 
           return (
             <MediaCard
@@ -103,6 +116,7 @@ export function LibrarySection({
               showRating={showRating}
               onRate={(rating) => onRate?.(item, rating)}
               statusLine={statusLine}
+              progress={progress}
               episodeAlert={
                 alert && onDismissAlert
                   ? { text: alert.alert_text, onDismiss: () => onDismissAlert(alert) }

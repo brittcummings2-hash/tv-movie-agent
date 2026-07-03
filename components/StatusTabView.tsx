@@ -19,6 +19,7 @@ interface StatusTabViewProps {
   onUpdate: (item: UserRating, draft: LibraryEntryDraft) => Promise<void>;
   onDelete: (item: UserRating) => Promise<void>;
   onProfileShow?: (item: UserRating) => void;
+  onUpdateProgress?: (item: UserRating, season: number, episode: number) => void;
 }
 
 function matchesStatus(item: UserRating, status: string): boolean {
@@ -36,6 +37,7 @@ export function StatusTabView({
   onUpdate,
   onDelete,
   onProfileShow,
+  onUpdateProgress,
 }: StatusTabViewProps) {
   // An unseen episode alert surfaces a show in In Progress regardless of where
   // it's stored — so a finished show with a new episode pops back in. Dismissing
@@ -124,6 +126,7 @@ export function StatusTabView({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onProfileShow={onProfileShow}
+            onUpdateProgress={onUpdateProgress}
           />
         )}
         {watchingNow.length > 0 && (
@@ -139,6 +142,7 @@ export function StatusTabView({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onProfileShow={onProfileShow}
+            onUpdateProgress={onUpdateProgress}
           />
         )}
         {caughtUp.length > 0 && (
