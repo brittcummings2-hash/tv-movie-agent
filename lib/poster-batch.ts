@@ -16,6 +16,7 @@ export interface LibraryMediaMetadata {
   episodeCounts: Record<string, number | null>;
   nextEpisodes: Record<string, string | null>;
   seriesStatuses: Record<string, string | null>;
+  trailers: Record<string, string | null>;
 }
 
 const CONCURRENCY = 12;
@@ -84,6 +85,7 @@ export async function resolveLibraryMedia(items: PosterRequestItem[]): Promise<L
   const episodeCounts: Record<string, number | null> = {};
   const nextEpisodes: Record<string, string | null> = {};
   const seriesStatuses: Record<string, string | null> = {};
+  const trailers: Record<string, string | null> = {};
 
   for (const [key, ids] of idsByKey) {
     const result = keyToResult.get(key);
@@ -95,10 +97,11 @@ export async function resolveLibraryMedia(items: PosterRequestItem[]): Promise<L
       episodeCounts[id] = result?.episodeCount ?? null;
       nextEpisodes[id] = result?.nextEpisodeAirDate ?? null;
       seriesStatuses[id] = result?.seriesStatus ?? null;
+      trailers[id] = result?.trailerUrl ?? null;
     }
   }
 
-  return { posters, overviews, platforms, releaseDates, episodeCounts, nextEpisodes, seriesStatuses };
+  return { posters, overviews, platforms, releaseDates, episodeCounts, nextEpisodes, seriesStatuses, trailers };
 }
 
 /** @deprecated Use resolveLibraryMedia */

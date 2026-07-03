@@ -20,6 +20,7 @@ export interface TmdbResolveResult extends TmdbImages {
   genres: string[];
   nextEpisodeAirDate: string | null;
   seriesStatus: string | null;
+  trailerUrl: string | null;
 }
 
 const cache = new Map<string, { data: TmdbResolveResult | null; expires: number }>();
@@ -342,6 +343,22 @@ export function formatScoreOutOfTen(score: number): string {
   return Number.isInteger(rounded) ? `${rounded}/10` : `${rounded.toFixed(1)}/10`;
 }
 
+interface TmdbVideo {
+  site?: string;
+  type?: string;
+  key?: string;
+  official?: boolean;
+}
+
+function pickTrailerUrl(videos: TmdbVideo[]): string | null {
+  const youtube = videos.filter((video) => video.site === "YouTube" && video.key);
+  const pick =
+    youtube.find((video) => video.type === "Trailer" && video.official) ??
+    youtube.find((video) => video.type === "Trailer") ??
+    youtube.find((video) => video.type === "Teaser");
+  return pick?.key ? `https://www.youtube.com/watch?v=${pick.key}` : null;
+}
+
 async function fetchDetail(
   id: number,
   kind: MediaKind
@@ -353,9 +370,10 @@ async function fetchDetail(
   tmdbRating: number | null;
   nextEpisodeAirDate: string | null;
   seriesStatus: string | null;
+  trailerUrl: string | null;
 }> {
   const path = kind === "tv" ? `/tv/${id}` : `/movie/${id}`;
-  const res = await tmdbFetch(path);
+  const res = await tmdbFetch(`${path}?append_to_response=videos`);
   if (!res) {
     return {
       overview: "",
@@ -365,6 +383,7 @@ async function fetchDetail(
       tmdbRating: null,
       nextEpisodeAirDate: null,
       seriesStatus: null,
+      trailerUrl: null,
     };
   }
 
@@ -376,6 +395,7 @@ async function fetchDetail(
     vote_average?: number;
     status?: string;
     next_episode_to_air?: { air_date?: string } | null;
+    videos?: { results?: TmdbVideo[] };
   };
 
   const genres = (data.genres ?? [])
@@ -396,6 +416,7 @@ async function fetchDetail(
     nextEpisodeAirDate:
       kind === "tv" ? data.next_episode_to_air?.air_date?.trim() || null : null,
     seriesStatus: kind === "tv" ? String(data.status ?? "").trim() || null : null,
+    trailerUrl: pickTrailerUrl(data.videos?.results ?? []),
   };
 }
 
@@ -417,6 +438,7 @@ async function toResolveResult(
   let tmdbRating: number | null = null;
   let nextEpisodeAirDate: string | null = null;
   let seriesStatus: string | null = null;
+  let trailerUrl: string | null = null;
   if (item.id) {
     const detail = await fetchDetail(item.id, kind);
     if (!overview) overview = detail.overview;
@@ -426,6 +448,7 @@ async function toResolveResult(
     tmdbRating = detail.tmdbRating;
     nextEpisodeAirDate = detail.nextEpisodeAirDate;
     seriesStatus = detail.seriesStatus;
+    trailerUrl = detail.trailerUrl;
   }
 
   return {
@@ -443,6 +466,7 @@ async function toResolveResult(
     genres,
     nextEpisodeAirDate,
     seriesStatus,
+    trailerUrl,
   };
 }
 

@@ -153,6 +153,7 @@ export async function attachRatingImages(items: UserRating[]): Promise<UserRatin
         platform: item.platform || resolved?.platform || "",
         next_episode_air_date: resolved?.nextEpisodeAirDate ?? null,
         series_status: resolved?.seriesStatus ?? null,
+        trailerUrl: resolved?.trailerUrl ?? null,
       };
     })
   );
@@ -170,6 +171,7 @@ export async function attachRecommendationImages(items: Recommendation[]): Promi
         ...item,
         posterUrl: resolved?.posterUrl ?? null,
         heroUrl: resolved?.heroUrl ?? null,
+        trailerUrl: resolved?.trailerUrl ?? null,
       };
     })
   );

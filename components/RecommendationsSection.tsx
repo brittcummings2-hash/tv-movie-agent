@@ -89,6 +89,7 @@ function RecCard({
         meta={buildRecommendationMeta(item)}
         description={description}
         posterUrl={item.posterUrl}
+        trailerUrl={item.trailerUrl}
         badge={badge}
         tags={buildRecommendationTags(item)}
         actions={

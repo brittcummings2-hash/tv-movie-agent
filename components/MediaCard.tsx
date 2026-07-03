@@ -19,6 +19,7 @@ interface MediaCardProps {
   actions?: ReactNode;
   episodeAlert?: { text: string; onDismiss: () => void } | null;
   statusLine?: { label: string; tone: "scheduled" | "waiting" | "ended" } | null;
+  trailerUrl?: string | null;
 }
 
 function Poster({ url, title }: { url?: string | null; title: string }) {
@@ -50,6 +51,7 @@ export function MediaCard({
   actions,
   episodeAlert,
   statusLine,
+  trailerUrl,
 }: MediaCardProps) {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const visibleTags = tags.map((tag) => tag.trim()).filter(Boolean);
@@ -62,7 +64,24 @@ export function MediaCard({
       <Poster url={posterUrl} title={title} />
       <div className="media-card-body">
         <div className="card-title card-title-compact">{title}</div>
-        {meta && <div className="card-meta card-meta-compact">{meta}</div>}
+        {(meta || trailerUrl) && (
+          <div className="card-meta card-meta-compact">
+            {meta}
+            {trailerUrl && (
+              <>
+                {meta ? " · " : ""}
+                <a
+                  className="card-trailer-link"
+                  href={trailerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  ▶ Trailer
+                </a>
+              </>
+            )}
+          </div>
+        )}
         {episodeAlert && (
           <div className="media-card-alert">
             <div className="media-card-alert-head">

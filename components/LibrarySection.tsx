@@ -97,6 +97,7 @@ export function LibrarySection({
               meta={cardContent.meta}
               description={cardContent.description}
               posterUrl={item.posterUrl ?? recommendation?.posterUrl}
+              trailerUrl={item.trailerUrl ?? recommendation?.trailerUrl}
               tags={cardContent.tags}
               rating={item.rating}
               showRating={showRating}

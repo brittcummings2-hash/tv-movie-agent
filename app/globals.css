@@ -1253,3 +1253,14 @@ button {
 .dismissed-toggle:hover {
   color: var(--text-tertiary);
 }
+
+.card-trailer-link {
+  color: var(--coral);
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.card-trailer-link:hover {
+  text-decoration: underline;
+}

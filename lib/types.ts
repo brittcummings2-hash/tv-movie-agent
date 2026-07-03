@@ -29,6 +29,7 @@ export interface UserRating {
   tmdb_rating?: number | null;
   next_episode_air_date?: string | null;
   series_status?: string | null;
+  trailerUrl?: string | null;
 }
 
 export interface Recommendation {
@@ -55,6 +56,7 @@ export interface Recommendation {
   created_at: string;
   posterUrl?: string | null;
   heroUrl?: string | null;
+  trailerUrl?: string | null;
 }
 
 export interface DailyDigest {

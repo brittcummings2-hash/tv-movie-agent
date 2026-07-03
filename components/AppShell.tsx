@@ -69,6 +69,7 @@ async function fetchLibraryMedia(items: ReturnType<typeof buildPosterRequests>) 
     episodeCounts?: Record<string, number | null>;
     nextEpisodes?: Record<string, string | null>;
     seriesStatuses?: Record<string, string | null>;
+    trailers?: Record<string, string | null>;
   };
   return {
     posters: body.posters ?? {},
@@ -78,6 +79,7 @@ async function fetchLibraryMedia(items: ReturnType<typeof buildPosterRequests>) 
     episodeCounts: body.episodeCounts ?? {},
     nextEpisodes: body.nextEpisodes ?? {},
     seriesStatuses: body.seriesStatuses ?? {},
+    trailers: body.trailers ?? {},
   };
 }
 
@@ -90,6 +92,7 @@ function mergeLibraryMedia(
     episodeCounts: Record<string, number | null>;
     nextEpisodes: Record<string, string | null>;
     seriesStatuses: Record<string, string | null>;
+    trailers: Record<string, string | null>;
   },
   setLibrary: Dispatch<SetStateAction<UserRating[]>>,
   setRecommendations: Dispatch<SetStateAction<Recommendation[]>>,
@@ -107,6 +110,7 @@ function mergeLibraryMedia(
         episode_count: media.episodeCounts[key] ?? item.episode_count ?? null,
         next_episode_air_date: media.nextEpisodes[key] ?? item.next_episode_air_date ?? null,
         series_status: media.seriesStatuses[key] ?? item.series_status ?? null,
+        trailerUrl: media.trailers[key] ?? item.trailerUrl ?? null,
       };
     })
   );
@@ -114,6 +118,7 @@ function mergeLibraryMedia(
     prev.map((item) => ({
       ...item,
       posterUrl: media.posters[`rec:${item.id}`] ?? item.posterUrl ?? null,
+      trailerUrl: media.trailers[`rec:${item.id}`] ?? item.trailerUrl ?? null,
     }))
   );
   setAlerts((prev) =>
