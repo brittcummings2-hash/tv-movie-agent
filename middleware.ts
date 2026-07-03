@@ -12,11 +12,28 @@ function isPublicPath(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
   if (!isPortalAuthEnabled()) {
+    // Without a password the deployed app (and sheet write access) would be
+    // public — refuse to serve in production until PORTAL_PASSWORD is set.
+    if (process.env.NODE_ENV === "production" && !isPublicPath(pathname)) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "PORTAL_PASSWORD is not configured on the server" },
+          { status: 503 }
+        );
+      }
+      return new NextResponse(
+        "<h1>Almost there</h1><p>This app is locked until a password is configured. " +
+          "Add a <code>PORTAL_PASSWORD</code> environment variable in Vercel " +
+          "(Project → Settings → Environment Variables) and redeploy.</p>",
+        { status: 503, headers: { "Content-Type": "text/html" } }
+      );
+    }
     return NextResponse.next();
   }
 
-  const { pathname } = request.nextUrl;
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
