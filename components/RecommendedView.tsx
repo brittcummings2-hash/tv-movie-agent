@@ -4,7 +4,7 @@ import type { EpisodeAlert, Recommendation, ToastMessage, UserRating, WatchStatu
 import type { LibraryEntryDraft } from "./EditLibraryEntryModal";
 import { EpisodeAlertsSection } from "./EpisodeAlertsSection";
 import { LibrarySection } from "./LibrarySection";
-import { RecommendationsSection } from "./RecommendationsSection";
+import { DismissedRecommendationsSection, RecommendationsSection } from "./RecommendationsSection";
 import { SparkRefreshButton } from "./SparkRefreshButton";
 
 interface RecommendedViewProps {
@@ -12,11 +12,13 @@ interface RecommendedViewProps {
   recommendations: Recommendation[];
   savedQueue: UserRating[];
   allRecommendations: Recommendation[];
+  dismissedRecommendations: Recommendation[];
   sparkRunning: boolean;
   onSparkRefresh: () => void;
   onToast: (toast: ToastMessage) => void;
   onDismissAlert: (id: string, rowIndex: number) => void;
-  onDismissRec: (id: string) => void;
+  onDismissRec: (id: string, reasons: string, comments: string) => void;
+  onRestoreRec: (id: string) => void;
   onSaveRec: (item: Recommendation, status: "want_to_watch" | "watching") => Promise<void>;
   onMoveStage: (item: UserRating, status: WatchStatus) => Promise<void>;
   onUpdate: (item: UserRating, draft: LibraryEntryDraft) => Promise<void>;
@@ -28,11 +30,13 @@ export function RecommendedView({
   recommendations,
   savedQueue,
   allRecommendations,
+  dismissedRecommendations,
   sparkRunning,
   onSparkRefresh,
   onToast,
   onDismissAlert,
   onDismissRec,
+  onRestoreRec,
   onSaveRec,
   onMoveStage,
   onUpdate,
@@ -74,6 +78,11 @@ export function RecommendedView({
           />
         </>
       )}
+      <DismissedRecommendationsSection
+        items={dismissedRecommendations}
+        onToast={onToast}
+        onRestore={onRestoreRec}
+      />
     </>
   );
 }

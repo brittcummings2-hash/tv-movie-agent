@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCached, invalidateCachedPrefix, setCached } from "@/lib/sheet-cache";
-import { getSheetRows, updateSheetField } from "@/lib/sheets";
+import { getSheetRows, updateSheetField, updateSheetFields } from "@/lib/sheets";
 import { attachRecommendationImages, mapRecommendations } from "@/lib/mappers";
 import { SHEET_TABS } from "@/lib/types";
 
@@ -28,14 +28,34 @@ export async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const id = String(body.id ?? "");
-    const field = String(body.field ?? "user_action");
-    const value = String(body.val ?? body.value ?? "");
 
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    const allowed = ["user_action", "user_rating", "user_comments"];
+    const allowed = ["user_action", "user_rating", "user_reasons", "user_comments"];
+
+    // Multi-field form: { id, fields: { user_action, user_reasons, ... } }
+    if (body.fields && typeof body.fields === "object") {
+      const fields: Record<string, string> = {};
+      for (const [field, value] of Object.entries(body.fields as Record<string, unknown>)) {
+        if (!allowed.includes(field)) {
+          return NextResponse.json({ error: "Field not allowed" }, { status: 400 });
+        }
+        fields[field] = String(value ?? "");
+      }
+      const result = await updateSheetFields(SHEET_TABS.RECOMMENDATIONS, id, fields);
+      if (result.status === "error") {
+        return NextResponse.json({ error: "Update failed" }, { status: 404 });
+      }
+      invalidateCachedPrefix("recommendations:");
+      invalidateCachedPrefix("bootstrap:");
+      return NextResponse.json({ ok: true });
+    }
+
+    const field = String(body.field ?? "user_action");
+    const value = String(body.val ?? body.value ?? "");
+
     if (!allowed.includes(field)) {
       return NextResponse.json({ error: "Field not allowed" }, { status: 400 });
     }

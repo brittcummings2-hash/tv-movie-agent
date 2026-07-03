@@ -277,6 +277,12 @@ export function AppShell() {
     [recommendations, library]
   );
 
+  const dismissedRecommendations = useMemo(
+    () =>
+      recommendations.filter((item) => item.user_action.trim().toLowerCase() === "dismiss"),
+    [recommendations]
+  );
+
   const filteredAlerts = useMemo(
     () => filterAlerts(alerts, searchQuery),
     [alerts, searchQuery]
@@ -642,15 +648,25 @@ export function AppShell() {
                 recommendations={filteredRecommendations}
                 savedQueue={filteredSavedQueue}
                 allRecommendations={recommendations}
+                dismissedRecommendations={dismissedRecommendations}
                 sparkRunning={sparkRunning}
                 onSparkRefresh={refreshSpark}
                 onToast={handleToast}
                 onDismissAlert={(id, rowIndex) =>
                   setAlerts((prev) => prev.filter((a) => !(a.id === id && a.rowIndex === rowIndex)))
                 }
-                onDismissRec={(id) =>
+                onDismissRec={(id, reasons, comments) =>
                   setRecommendations((prev) =>
-                    prev.map((item) => (item.id === id ? { ...item, user_action: "dismiss" } : item))
+                    prev.map((item) =>
+                      item.id === id
+                        ? { ...item, user_action: "dismiss", user_reasons: reasons, user_comments: comments }
+                        : item
+                    )
+                  )
+                }
+                onRestoreRec={(id) =>
+                  setRecommendations((prev) =>
+                    prev.map((item) => (item.id === id ? { ...item, user_action: "" } : item))
                   )
                 }
                 onSaveRec={saveRecommendation}

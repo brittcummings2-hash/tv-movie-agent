@@ -153,6 +153,37 @@ export async function updateSheetField(
   return { status: "success" };
 }
 
+export async function updateSheetFields(
+  tabName: string,
+  id: string,
+  fields: Record<string, string>
+): Promise<{ status: "success" | "error" }> {
+  const columns = TAB_COLUMNS[tabName];
+  if (!columns) return { status: "error" };
+
+  const entries = Object.entries(fields).filter(([field]) => columns[field]);
+  if (entries.length === 0) return { status: "error" };
+
+  const rowIndex = await findRowIndex(tabName, 0, id);
+  if (rowIndex == null) return { status: "error" };
+
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSheetId();
+  const data: sheets_v4.Schema$ValueRange[] = entries.map(([field, value]) => ({
+    range: `'${tabName}'!${columnIndexToLetter(columns[field])}${rowIndex}`,
+    values: [[value]],
+  }));
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: "RAW", data },
+    })
+  );
+
+  return { status: "success" };
+}
+
 export async function updateSheetFieldByRow(
   tabName: string,
   rowIndex: number,

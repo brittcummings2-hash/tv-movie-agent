@@ -35,9 +35,11 @@ When she taps **Want to Watch** on a rec in the app, it:
 - Shows it under **Saved for later** on the Recommended tab
 - Sets `user_action=accept` on that recommendation row
 
-When she taps **Dismiss**, the app sets `user_action=dismiss`.
+When she taps **Not for me**, the app sets `user_action=dismiss` and may also write
+`user_reasons` (pipe-separated tags like `Too Slow to Start | Didn't Hook Me`) and
+`user_comments` (free text, e.g. "watched 6 minutes and bailed").
 
-Keep respecting both — don't re-recommend dismissed titles. Treat `accept` as "she's already got this in her queue."
+Keep respecting both — don't re-recommend dismissed titles. Treat `accept` as "she's already got this in her queue." **Weight `user_reasons` and `user_comments` on dismissed rows as strong avoid-signals** — they explain exactly why a pick missed, which is more useful than the dismissal itself. If she restores a dismissed rec (`user_action` cleared), treat it as active again.
 
 **3. Episode alerts — for In Progress *and* finished shows**
 
