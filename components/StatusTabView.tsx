@@ -4,7 +4,9 @@ import { useMemo } from "react";
 import type { EpisodeAlert, Recommendation, UserRating, WatchStatus } from "@/lib/types";
 import { normalizeTitle } from "@/lib/search";
 import type { AppTab } from "./Nav";
+import type { ToastMessage } from "@/lib/types";
 import { LibrarySection } from "./LibrarySection";
+import { DismissedRecommendationsSection } from "./RecommendationsSection";
 
 import type { LibraryEntryDraft } from "./EditLibraryEntryModal";
 
@@ -13,6 +15,7 @@ interface StatusTabViewProps {
   items: UserRating[];
   recommendations: Recommendation[];
   alerts?: EpisodeAlert[];
+  dismissedRecommendations?: Recommendation[];
   onDismissAlert?: (alert: EpisodeAlert) => void;
   onMoveStage: (item: UserRating, status: WatchStatus) => Promise<void>;
   onRate: (item: UserRating, rating: number) => Promise<void>;
@@ -20,6 +23,8 @@ interface StatusTabViewProps {
   onDelete: (item: UserRating) => Promise<void>;
   onProfileShow?: (item: UserRating) => void;
   onUpdateProgress?: (item: UserRating, season: number, episode: number) => void;
+  onRestoreRec?: (id: string) => void;
+  onToast?: (toast: ToastMessage) => void;
 }
 
 function matchesStatus(item: UserRating, status: string): boolean {
@@ -38,6 +43,9 @@ export function StatusTabView({
   onDelete,
   onProfileShow,
   onUpdateProgress,
+  dismissedRecommendations = [],
+  onRestoreRec,
+  onToast,
 }: StatusTabViewProps) {
   // An unseen episode alert surfaces a show in In Progress regardless of where
   // it's stored — so a finished show with a new episode pops back in. Dismissing
@@ -163,7 +171,7 @@ export function StatusTabView({
     );
   }
 
-  if (watched.length === 0 && dnf.length === 0) {
+  if (watched.length === 0 && dnf.length === 0 && dismissedRecommendations.length === 0) {
     return (
       <div className="empty-state empty-state-compact">
         Nothing finished yet — mark a show done from In Progress.
@@ -176,7 +184,7 @@ export function StatusTabView({
       <LibrarySection
         label="Watched"
         variant="watched"
-        hideLabel
+        hideLabel={dnf.length === 0 && dismissedRecommendations.length === 0}
         items={watched}
         recommendations={recommendations}
         showRecContent
@@ -198,6 +206,13 @@ export function StatusTabView({
         onUpdate={onUpdate}
         onDelete={onDelete}
       />
+      {onRestoreRec && onToast && (
+        <DismissedRecommendationsSection
+          items={dismissedRecommendations}
+          onToast={onToast}
+          onRestore={onRestoreRec}
+        />
+      )}
     </>
   );
 }

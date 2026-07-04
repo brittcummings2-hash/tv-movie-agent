@@ -22,6 +22,8 @@ npm run dev
     app breaks with `invalid_grant` until you re-run `npm run google:auth`.
 - `TMDB_API_KEY` — posters, hero images, trailers, streaming platform
 - `GEMINI_API_KEY` — optional; parses “I watched X, 5 stars” for quick-add
+- `NEXT_PUBLIC_GEMINI_SPARK_URL` — optional; where the header **Spark** button
+  opens. Set it to your Gemini Spark gem's URL; defaults to the Gemini app.
 - `PORTAL_PASSWORD` — login gate. **Required in production** — the deployed app
   refuses to serve without it (otherwise your library and sheet write access
   would be public).

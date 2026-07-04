@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Recommendation } from "@/lib/types";
+import { StarRating } from "./StarRating";
 
-export interface NotForMePayload {
+export interface DismissPayload {
+  rating: number;
   tags: string[];
   comments: string;
 }
 
 /** Why a rec didn't land — this feeds Spark's taste model as avoid-signal. */
-const NOT_FOR_ME_TAGS = [
+const DISMISS_TAGS = [
   "Not My Vibe",
   "Tried It, Quit Early",
   "Too Slow to Start",
@@ -22,13 +23,14 @@ const NOT_FOR_ME_TAGS = [
   "Already Seen It",
 ];
 
-interface NotForMeModalProps {
-  item: Recommendation;
+interface DismissModalProps {
+  title: string;
   onClose: () => void;
-  onComplete: (payload: NotForMePayload) => Promise<void>;
+  onComplete: (payload: DismissPayload) => Promise<void>;
 }
 
-export function NotForMeModal({ item, onClose, onComplete }: NotForMeModalProps) {
+export function DismissModal({ title, onClose, onComplete }: DismissModalProps) {
+  const [rating, setRating] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [comments, setComments] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,7 +57,7 @@ export function NotForMeModal({ item, onClose, onComplete }: NotForMeModalProps)
     event.preventDefault();
     setSaving(true);
     try {
-      await onComplete({ tags: selectedTags, comments: comments.trim() });
+      await onComplete({ rating, tags: selectedTags, comments: comments.trim() });
       onClose();
     } catch {
       // Error toast handled by parent
@@ -70,20 +72,24 @@ export function NotForMeModal({ item, onClose, onComplete }: NotForMeModalProps)
         className="modal-card finish-modal"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
-        aria-labelledby="notforme-title"
+        aria-labelledby="dismiss-title"
       >
-        <h2 id="notforme-title" className="modal-title">
-          Not feeling {item.title}?
+        <h2 id="dismiss-title" className="modal-title">
+          Not watching {title}?
         </h2>
         <p className="modal-copy">
-          Optional — tap why, and Spark learns what to skip next time. You can restore
-          dismissed picks from the bottom of the Recommended tab.
+          Optional — rate it and tap why, and Spark learns what to skip next time. It
+          moves to your Dismissed list on the Watched tab (restore it anytime).
         </p>
         <form onSubmit={handleSubmit}>
+          <div className="form-field finish-rating-field finish-rating-field--first">
+            <label>Your rating</label>
+            <StarRating value={rating} interactive onChange={setRating} />
+          </div>
           <div className="form-field">
             <label>Why not?</label>
             <div className="finish-tag-options">
-              {NOT_FOR_ME_TAGS.map((tag) => {
+              {DISMISS_TAGS.map((tag) => {
                 const selected = selectedTags.some(
                   (entry) => entry.toLowerCase() === tag.toLowerCase()
                 );
@@ -102,9 +108,9 @@ export function NotForMeModal({ item, onClose, onComplete }: NotForMeModalProps)
             </div>
           </div>
           <div className="form-field">
-            <label htmlFor="notforme-comments">Anything else?</label>
+            <label htmlFor="dismiss-comments">Anything else?</label>
             <textarea
-              id="notforme-comments"
+              id="dismiss-comments"
               className="form-textarea"
               rows={2}
               value={comments}
@@ -117,7 +123,7 @@ export function NotForMeModal({ item, onClose, onComplete }: NotForMeModalProps)
               Cancel
             </button>
             <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-              {saving ? "Saving…" : "Dismiss pick"}
+              {saving ? "Saving…" : "Dismiss"}
             </button>
           </div>
         </form>

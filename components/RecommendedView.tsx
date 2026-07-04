@@ -1,87 +1,59 @@
 "use client";
 
-import type { EpisodeAlert, Recommendation, ToastMessage, UserRating, WatchStatus } from "@/lib/types";
-import type { LibraryEntryDraft } from "./EditLibraryEntryModal";
+import type { EpisodeAlert, Recommendation, ToastMessage, UserRating } from "@/lib/types";
+import type { DismissPayload } from "./DismissModal";
 import { EpisodeAlertsSection } from "./EpisodeAlertsSection";
-import { LibrarySection } from "./LibrarySection";
-import { DismissedRecommendationsSection, RecommendationsSection } from "./RecommendationsSection";
-import { SparkRefreshButton } from "./SparkRefreshButton";
+import { RecommendationsSection, SavedItemsSection } from "./RecommendationsSection";
 
 interface RecommendedViewProps {
   alerts: EpisodeAlert[];
   recommendations: Recommendation[];
-  savedQueue: UserRating[];
   allRecommendations: Recommendation[];
-  dismissedRecommendations: Recommendation[];
-  sparkRunning: boolean;
-  onSparkRefresh: () => void;
+  savedItems: UserRating[];
   onToast: (toast: ToastMessage) => void;
   onDismissAlert: (id: string, rowIndex: number) => void;
-  onDismissRec: (id: string, reasons: string, comments: string) => void;
-  onRestoreRec: (id: string) => void;
-  onSaveRec: (item: Recommendation, status: "want_to_watch" | "watching") => Promise<void>;
-  onMoveStage: (item: UserRating, status: WatchStatus) => Promise<void>;
-  onUpdate: (item: UserRating, draft: LibraryEntryDraft) => Promise<void>;
-  onDelete: (item: UserRating) => Promise<void>;
+  onDismissRec: (id: string, rating: number, reasons: string, comments: string) => void;
+  onSaveRec: (item: Recommendation, status: "watching") => Promise<void>;
+  onStartSaved: (item: UserRating) => Promise<void>;
+  onDismissSaved: (item: UserRating, payload: DismissPayload) => Promise<void>;
 }
 
 export function RecommendedView({
   alerts,
   recommendations,
-  savedQueue,
   allRecommendations,
-  dismissedRecommendations,
-  sparkRunning,
-  onSparkRefresh,
+  savedItems,
   onToast,
   onDismissAlert,
   onDismissRec,
-  onRestoreRec,
   onSaveRec,
-  onMoveStage,
-  onUpdate,
-  onDelete,
+  onStartSaved,
+  onDismissSaved,
 }: RecommendedViewProps) {
-  const hasContent = alerts.length > 0 || savedQueue.length > 0 || recommendations.length > 0;
+  const hasContent = alerts.length > 0 || recommendations.length > 0 || savedItems.length > 0;
+
+  if (!hasContent) {
+    return (
+      <div className="empty-state empty-state-compact">
+        No recommendations right now — tap Spark in the header for fresh picks.
+      </div>
+    );
+  }
 
   return (
     <>
-      <SparkRefreshButton running={sparkRunning} onRefresh={onSparkRefresh} />
-      {!hasContent ? (
-        <div className="empty-state empty-state-compact">
-          No recommendations right now — tap Spark above for new picks.
-        </div>
-      ) : (
-        <>
-          <EpisodeAlertsSection
-            items={alerts}
-            onToast={onToast}
-            onDismiss={onDismissAlert}
-          />
-          {savedQueue.length > 0 && (
-            <LibrarySection
-              label="Saved for later"
-              variant="want-to-watch"
-              items={savedQueue}
-              recommendations={allRecommendations}
-              showRecContent
-              onMoveStage={onMoveStage}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-            />
-          )}
-          <RecommendationsSection
-            items={recommendations}
-            onToast={onToast}
-            onSave={onSaveRec}
-            onDismiss={onDismissRec}
-          />
-        </>
-      )}
-      <DismissedRecommendationsSection
-        items={dismissedRecommendations}
+      <EpisodeAlertsSection items={alerts} onToast={onToast} onDismiss={onDismissAlert} />
+      <SavedItemsSection
+        items={savedItems}
+        recommendations={allRecommendations}
+        onStart={onStartSaved}
+        onDismiss={onDismissSaved}
+      />
+      <RecommendationsSection
+        items={recommendations}
         onToast={onToast}
-        onRestore={onRestoreRec}
+        onSave={onSaveRec}
+        onDismiss={onDismissRec}
       />
     </>
   );

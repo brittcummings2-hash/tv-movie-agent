@@ -10,11 +10,8 @@ interface AddShowModalProps {
   onToast: (toast: ToastMessage) => void;
 }
 
-type AddStatus = "watching" | "want_to_watch";
-
 export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
   const [title, setTitle] = useState("");
-  const [status, setStatus] = useState<AddStatus>("watching");
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -47,7 +44,7 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
             rating: 0,
             release_date: "",
             platform: "",
-            watch_status: status,
+            watch_status: "watching",
             comments: "",
           },
         }),
@@ -60,10 +57,9 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
         data.recommendation as Recommendation | undefined,
         Boolean(data.sparkPending)
       );
-      const label = status === "watching" ? "In Progress" : "Recommended";
       const toastMessage = data.sparkPending
-        ? `Added ${data.item?.show_title ?? showTitle} to ${label} — Spark is profiling it`
-        : `Added ${data.item?.show_title ?? showTitle} to ${label}`;
+        ? `Added ${data.item?.show_title ?? showTitle} to In Progress — Spark is profiling it`
+        : `Added ${data.item?.show_title ?? showTitle} to In Progress`;
       onToast(createToast("success", toastMessage));
       onClose();
     } catch (error) {
@@ -85,7 +81,7 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
         <h2 id="add-show-title" className="modal-title">
           Add a show
         </h2>
-        <p className="modal-copy">Enter the title and where it should go.</p>
+        <p className="modal-copy">Enter the title — it goes straight to In Progress.</p>
         <form onSubmit={handleSubmit}>
           <div className="form-field">
             <label htmlFor="add-show-input">Title</label>
@@ -99,27 +95,6 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
               aria-label="Show or movie title"
               disabled={submitting}
             />
-          </div>
-          <div className="form-field">
-            <label>Add to</label>
-            <div className="add-status-options">
-              <button
-                type="button"
-                className={`tag tag-muted add-status-option${status === "watching" ? " add-status-option--selected" : ""}`}
-                onClick={() => setStatus("watching")}
-                aria-pressed={status === "watching"}
-              >
-                In Progress
-              </button>
-              <button
-                type="button"
-                className={`tag tag-muted add-status-option${status === "want_to_watch" ? " add-status-option--selected" : ""}`}
-                onClick={() => setStatus("want_to_watch")}
-                aria-pressed={status === "want_to_watch"}
-              >
-                Saved for later
-              </button>
-            </div>
           </div>
           <div className="modal-actions">
             <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>

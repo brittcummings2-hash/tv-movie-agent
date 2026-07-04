@@ -1428,3 +1428,25 @@ button {
   min-width: 20px;
   text-align: right;
 }
+
+/* Header link out to the Gemini Spark agent */
+.header-spark-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  background: var(--coral-bg);
+  color: var(--coral);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.header-spark-link:hover,
+.header-spark-link:focus-visible {
+  background: var(--coral);
+  color: #fff;
+}

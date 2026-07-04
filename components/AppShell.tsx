@@ -14,6 +14,7 @@ import {
 import { formatFinishTags } from "@/lib/finish-tags";
 import { structuredFromRecommendation } from "@/lib/structured-entry";
 import { AddShowModal } from "./AddShowModal";
+import type { DismissPayload } from "./DismissModal";
 import type { LibraryEntryDraft } from "./EditLibraryEntryModal";
 import { FinishWatchedModal, type FinishWatchedPayload } from "./FinishWatchedModal";
 import { StatusTabView } from "./StatusTabView";
@@ -181,7 +182,6 @@ export function AppShell() {
   const [library, setLibrary] = useState<UserRating[]>([]);
   const [finishingItem, setFinishingItem] = useState<UserRating | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [sparkRunning, setSparkRunning] = useState(false);
 
   const handleToast = useCallback((toast: ToastMessage) => {
     setToasts((prev) => [...prev, toast]);
@@ -304,7 +304,9 @@ export function AppShell() {
     [library, searchQuery]
   );
 
-  const filteredSavedQueue = useMemo(
+  // Legacy "saved for later" items live in the Recommended tab now, alongside
+  // fresh Spark picks — they only move when she taps Start or Dismiss.
+  const savedItems = useMemo(
     () =>
       filteredLibrary
         .filter((item) => item.watch_status.toLowerCase() === "want_to_watch")
@@ -563,7 +565,7 @@ export function AppShell() {
     }
   }
 
-  async function saveRecommendation(item: Recommendation, status: "want_to_watch" | "watching") {
+  async function saveRecommendation(item: Recommendation, status: "watching") {
     const existing = library.find(
       (entry) => normalizeTitleForMatch(entry.show_title) === normalizeTitleForMatch(item.title)
     );
@@ -607,34 +609,29 @@ export function AppShell() {
         prev.map((rec) => (rec.id === item.id ? { ...rec, user_action: "accept" } : rec))
       );
 
-      const label = status === "watching" ? "In Progress" : "Recommended";
-      handleToast(createToast("success", `Added ${item.title} to ${label}`));
-      if (status === "watching") {
-        setActiveTab("watching");
-      }
+      handleToast(createToast("success", `Started ${item.title} — find it in In Progress`));
     } catch {
       handleToast(createToast("error", "Could not save recommendation"));
     }
   }
 
-  async function refreshSpark() {
-    if (sparkRunning) return;
-    setSparkRunning(true);
-    try {
-      const res = await fetch("/api/spark", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Spark refresh failed");
+  async function startSavedItem(item: UserRating) {
+    await moveStage(item, "watching");
+  }
 
-      await load({ silent: true });
-      const count = Number(data.added ?? 0);
-      handleToast(
-        createToast("success", count === 1 ? "Spark added 1 new pick" : `Spark added ${count} new picks`)
-      );
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Spark refresh failed";
-      handleToast(createToast("error", msg));
-    } finally {
-      setSparkRunning(false);
+  async function dismissSavedItem(item: UserRating, payload: DismissPayload) {
+    try {
+      const savedItem = await persistLibraryItem(item, {
+        watch_status: "dnf",
+        rating: payload.rating,
+        why_reasons: formatFinishTags(payload.tags),
+        comments: payload.comments,
+      });
+      setLibrary((prev) => prev.map((row) => (row.id === item.id ? savedItem : row)));
+      handleToast(createToast("success", `Dismissed ${item.show_title} — find it under Watched › Did Not Finish`));
+    } catch {
+      handleToast(createToast("error", "Could not dismiss show"));
+      throw new Error("Failed");
     }
   }
 
@@ -679,33 +676,30 @@ export function AppShell() {
               <RecommendedView
                 alerts={recommendedAlerts}
                 recommendations={filteredRecommendations}
-                savedQueue={filteredSavedQueue}
                 allRecommendations={recommendations}
-                dismissedRecommendations={dismissedRecommendations}
-                sparkRunning={sparkRunning}
-                onSparkRefresh={refreshSpark}
+                savedItems={savedItems}
                 onToast={handleToast}
                 onDismissAlert={(id, rowIndex) =>
                   setAlerts((prev) => prev.filter((a) => !(a.id === id && a.rowIndex === rowIndex)))
                 }
-                onDismissRec={(id, reasons, comments) =>
+                onDismissRec={(id, rating, reasons, comments) =>
                   setRecommendations((prev) =>
                     prev.map((item) =>
                       item.id === id
-                        ? { ...item, user_action: "dismiss", user_reasons: reasons, user_comments: comments }
+                        ? {
+                            ...item,
+                            user_action: "dismiss",
+                            user_rating: rating > 0 ? String(rating) : "",
+                            user_reasons: reasons,
+                            user_comments: comments,
+                          }
                         : item
                     )
                   )
                 }
-                onRestoreRec={(id) =>
-                  setRecommendations((prev) =>
-                    prev.map((item) => (item.id === id ? { ...item, user_action: "" } : item))
-                  )
-                }
                 onSaveRec={saveRecommendation}
-                onMoveStage={moveStage}
-                onUpdate={updateLibraryEntry}
-                onDelete={deleteLibraryEntry}
+                onStartSaved={startSavedItem}
+                onDismissSaved={dismissSavedItem}
               />
             </div>
             <div className={activeTab === "watched" ? "portal-panel" : "portal-panel portal-panel-hidden"}>
@@ -714,10 +708,17 @@ export function AppShell() {
                 items={filteredLibrary}
                 recommendations={recommendations}
                 alerts={alerts}
+                dismissedRecommendations={dismissedRecommendations}
                 onMoveStage={moveStage}
                 onRate={rateShow}
                 onUpdate={updateLibraryEntry}
                 onDelete={deleteLibraryEntry}
+                onRestoreRec={(id) =>
+                  setRecommendations((prev) =>
+                    prev.map((item) => (item.id === id ? { ...item, user_action: "" } : item))
+                  )
+                }
+                onToast={handleToast}
               />
             </div>
             <div className={activeTab === "stats" ? "portal-panel" : "portal-panel portal-panel-hidden"}>
@@ -752,8 +753,6 @@ export function AppShell() {
             );
             if (item.watch_status.toLowerCase() === "watching") {
               setActiveTab("watching");
-            } else if (item.watch_status.toLowerCase() === "want_to_watch") {
-              setActiveTab("recommended");
             }
           }}
           onToast={handleToast}

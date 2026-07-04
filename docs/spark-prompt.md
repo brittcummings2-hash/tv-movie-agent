@@ -30,16 +30,23 @@ If you add rows on her behalf, pick the right status. `want_to_watch` and `watch
 
 **2. Recommendations feedback loop**
 
-When she taps **Want to Watch** on a rec in the app, it:
-- Adds the show to `user_ratings` with `watch_status=want_to_watch`
-- Shows it under **Saved for later** on the Recommended tab
+Each rec has exactly two actions: **Start Watching** and **Dismiss**.
+
+When she taps **Start Watching**, the app:
+- Adds the show to `user_ratings` with `watch_status=watching`
 - Sets `user_action=accept` on that recommendation row
 
-When she taps **Not for me**, the app sets `user_action=dismiss` and may also write
-`user_reasons` (pipe-separated tags like `Too Slow to Start | Didn't Hook Me`) and
-`user_comments` (free text, e.g. "watched 6 minutes and bailed").
+When she taps **Dismiss**, a modal collects an optional rating + feedback, then the app writes:
+- `user_action=dismiss`
+- `user_rating` (1–5, optional — her gut read of the pick)
+- `user_reasons` (pipe-separated tags like `Too Slow to Start | Didn't Hook Me`)
+- `user_comments` (free text, e.g. "watched 6 minutes and bailed")
 
-Keep respecting both — don't re-recommend dismissed titles. Treat `accept` as "she's already got this in her queue." **Weight `user_reasons` and `user_comments` on dismissed rows as strong avoid-signals** — they explain exactly why a pick missed, which is more useful than the dismissal itself. If she restores a dismissed rec (`user_action` cleared), treat it as active again.
+Dismissed recs appear under **Watched › Dismissed** in the app, where she can restore them.
+
+Keep respecting both — don't re-recommend dismissed titles. Treat `accept` as "she's already watching this." **Weight `user_rating`, `user_reasons`, and `user_comments` on dismissed rows as strong avoid-signals** — they explain exactly why a pick missed, which is more useful than the dismissal itself. If she restores a dismissed rec (`user_action` cleared), treat it as active again.
+
+(There is no longer a "Want to Watch" / "Saved for later" stage or an in-app "Run Spark agent" button. She launches you from the **Spark** link in the app header.)
 
 **3. Episode alerts — for In Progress *and* finished shows**
 
