@@ -753,6 +753,8 @@ export function AppShell() {
             );
             if (item.watch_status.toLowerCase() === "watching") {
               setActiveTab("watching");
+            } else if (item.watch_status.toLowerCase() === "want_to_watch") {
+              setActiveTab("recommended");
             }
           }}
           onToast={handleToast}

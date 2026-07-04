@@ -94,6 +94,7 @@ function RecCard({
         posterUrl={item.posterUrl}
         trailerUrl={item.trailerUrl}
         badge={badge}
+        sourceTag={{ label: "Spark pick", kind: "spark" }}
         tags={buildRecommendationTags(item)}
         actions={
           <>
@@ -184,6 +185,11 @@ function SavedItemCard({
         description={description}
         posterUrl={item.posterUrl ?? recommendation?.posterUrl}
         trailerUrl={item.trailerUrl ?? recommendation?.trailerUrl}
+        sourceTag={
+          recommendation
+            ? { label: "Spark pick", kind: "spark" }
+            : { label: "Added by you", kind: "self" }
+        }
         tags={tags}
         actions={
           <>

@@ -6,7 +6,7 @@ export type AppTab = "watching" | "recommended" | "watched" | "stats";
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: "watching", label: "In Progress" },
-  { id: "recommended", label: "Recommended" },
+  { id: "recommended", label: "Watch List" },
   { id: "watched", label: "Watched" },
   { id: "stats", label: "Stats" },
 ];
@@ -19,10 +19,11 @@ interface NavProps {
   onAddClick: () => void;
 }
 
-// Where the header "Spark" button sends her — her Gemini Spark gem, or the
-// Gemini app if unset. Override with NEXT_PUBLIC_GEMINI_SPARK_URL.
+// Where the header "Spark" button sends her — her Gemini Spark chat.
+// Override with NEXT_PUBLIC_GEMINI_SPARK_URL.
 const GEMINI_SPARK_URL =
-  process.env.NEXT_PUBLIC_GEMINI_SPARK_URL?.trim() || "https://gemini.google.com/app";
+  process.env.NEXT_PUBLIC_GEMINI_SPARK_URL?.trim() ||
+  "https://gemini.google.com/spark/chat/114cc9d3f16e5e99";
 
 function AddIcon() {
   return (

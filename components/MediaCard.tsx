@@ -20,6 +20,7 @@ interface MediaCardProps {
   episodeAlert?: { text: string; onDismiss: () => void } | null;
   statusLine?: { label: string; tone: "scheduled" | "waiting" | "ended" } | null;
   trailerUrl?: string | null;
+  sourceTag?: { label: string; kind: "spark" | "self" } | null;
   progress?: {
     season: number;
     episode: number;
@@ -111,6 +112,7 @@ export function MediaCard({
   episodeAlert,
   statusLine,
   trailerUrl,
+  sourceTag,
   progress,
 }: MediaCardProps) {
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -123,6 +125,11 @@ export function MediaCard({
       {badge && <span className="media-card-badge">{badge}</span>}
       <Poster url={posterUrl} title={title} />
       <div className="media-card-body">
+        {sourceTag && (
+          <span className={`card-source-pill card-source-pill--${sourceTag.kind}`}>
+            {sourceTag.label}
+          </span>
+        )}
         <div className="card-title card-title-compact">{title}</div>
         {(meta || trailerUrl) && (
           <div className="card-meta card-meta-compact">
