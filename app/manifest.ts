@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "TV Tracker",
     short_name: "TV Tracker",
-    description: "Track what you've watched and what Spark recommends next",
+    description: "Track what you've watched and what to watch next",
     start_url: "/",
     display: "standalone",
     background_color: "#fefcfa",

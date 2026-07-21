@@ -420,6 +420,49 @@ async function fetchDetail(
   };
 }
 
+export interface TvEpisodeMarker {
+  season: number;
+  episode: number;
+  name: string;
+  airDate: string;
+}
+
+export interface TvEpisodeStatus {
+  last: TvEpisodeMarker | null;
+  next: TvEpisodeMarker | null;
+  seriesStatus: string | null;
+}
+
+function toEpisodeMarker(
+  raw: { season_number?: number; episode_number?: number; name?: string; air_date?: string } | null | undefined
+): TvEpisodeMarker | null {
+  if (!raw?.air_date) return null;
+  return {
+    season: Number(raw.season_number) || 0,
+    episode: Number(raw.episode_number) || 0,
+    name: String(raw.name ?? "").trim(),
+    airDate: String(raw.air_date).trim(),
+  };
+}
+
+/** Last/next episode air info for a TV series — powers the episode-alert scan. */
+export async function fetchTvEpisodeStatus(id: number): Promise<TvEpisodeStatus | null> {
+  const res = await tmdbFetch(`/tv/${id}`);
+  if (!res) return null;
+
+  const data = (await res.json()) as {
+    status?: string;
+    last_episode_to_air?: { season_number?: number; episode_number?: number; name?: string; air_date?: string } | null;
+    next_episode_to_air?: { season_number?: number; episode_number?: number; name?: string; air_date?: string } | null;
+  };
+
+  return {
+    last: toEpisodeMarker(data.last_episode_to_air),
+    next: toEpisodeMarker(data.next_episode_to_air),
+    seriesStatus: String(data.status ?? "").trim() || null,
+  };
+}
+
 async function toResolveResult(
   item: TmdbSearchItem,
   kind: MediaKind,

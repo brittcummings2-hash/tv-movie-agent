@@ -1429,8 +1429,11 @@ button {
   text-align: right;
 }
 
-/* Header link out to the Gemini Spark agent */
+/* Header "Fresh picks" button — runs the in-app recommendation engine */
 .header-spark-link {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1449,6 +1452,11 @@ button {
 .header-spark-link:focus-visible {
   background: var(--coral);
   color: #fff;
+}
+
+.header-spark-link:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Source pill on Watch List cards (Spark pick vs Added by you) */

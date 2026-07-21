@@ -1,3 +1,4 @@
+import { askClaudeJson, isClaudeConfigured } from "./claude";
 import { normalizeWatchStatus } from "./watch-stages";
 
 export type WatchStatus = "watched" | "watching" | "caught_up" | "want_to_watch" | "dnf";
@@ -107,51 +108,22 @@ export async function parseWatchMessage(message: string): Promise<ParsedWatchEnt
     throw new Error('Say what you’re watching, e.g. “In the middle of Shogun” or “Want to watch Severance”.');
   }
 
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) {
+  if (!isClaudeConfigured()) {
     return fallbackParse(text);
   }
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [
-            {
-              text:
-                "Extract a TV/movie watch-log row from casual speech. Return JSON only with keys: " +
-                "show_title (string, core title without season noise when possible), rating (0-5 integer), " +
-                'platform (string, "" if unknown), watch_status (one of: watched, watching, want_to_watch, dnf), ' +
-                'comments (string), media_kind (tv, movie, or unknown). ' +
-                "Map: finished/watched -> watched; in the middle of/currently watching -> watching; want to watch -> want_to_watch.",
-            },
-          ],
-        },
-        contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-        },
-      }),
-    }
-  );
-
-  if (!res.ok) {
-    return fallbackParse(text);
-  }
-
-  const data = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!raw) return fallbackParse(text);
 
   try {
-    const parsed = JSON.parse(raw) as Partial<ParsedWatchEntry>;
+    const parsed = await askClaudeJson<Partial<ParsedWatchEntry>>({
+      system:
+        "Extract a TV/movie watch-log row from casual speech. Return JSON only with keys: " +
+        "show_title (string, core title without season noise when possible), rating (0-5 integer), " +
+        'platform (string, "" if unknown), watch_status (one of: watched, watching, want_to_watch, dnf), ' +
+        "comments (string), media_kind (tv, movie, or unknown). " +
+        "Map: finished/watched -> watched; in the middle of/currently watching -> watching; want to watch -> want_to_watch.",
+      user: text,
+      maxTokens: 1024,
+    });
+
     const show_title = sanitizeShowTitle(String(parsed.show_title ?? ""));
     if (!show_title) return fallbackParse(text);
 

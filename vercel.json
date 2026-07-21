@@ -1,6 +1,8 @@
 {
   "crons": [
     { "path": "/api/health", "schedule": "0 14 * * *" },
-    { "path": "/api/backup", "schedule": "0 15 * * 0" }
+    { "path": "/api/backup", "schedule": "0 15 * * 0" },
+    { "path": "/api/recommend/run", "schedule": "0 13 * * 1,4" },
+    { "path": "/api/alerts/scan", "schedule": "30 12 * * *" }
   ]
 }

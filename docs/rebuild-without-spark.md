@@ -1,5 +1,11 @@
 # Rebuild plan: replacing Gemini Spark
 
+> **Status: implemented.** Phases 1–4 and the code side of Phase 5 are done —
+> see the README's "How recommendations work" section for the current state.
+> Remaining manual steps: set `ANTHROPIC_API_KEY` in Vercel, turn off the
+> Workspace Spark agent's schedules, and (after a verification week) delete
+> the `spark_queue` and `settings` tabs from the sheet.
+
 Goal: the app owns all recommendation intelligence itself. No external
 Workspace Spark agent, no Gemini API, no sheet-flag trigger dance. The
 Google Sheet stays as the datastore, TMDB stays for metadata, and the UI

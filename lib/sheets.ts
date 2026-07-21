@@ -370,6 +370,61 @@ export async function deleteUserRating(id: string): Promise<{ status: "success" 
   return { status: "success" };
 }
 
+export interface EpisodeAlertSheetEntry {
+  show_title: string;
+  alert_text: string;
+}
+
+async function findNextEpisodeAlertRowIndex(): Promise<number> {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSheetId();
+
+  const response = await withRetry(() =>
+    sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${SHEET_TABS.EPISODE_ALERTS}'!A2:G`,
+    })
+  );
+
+  const values = response.data.values ?? [];
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i] ?? [];
+    const hasData = row.some((cell) => String(cell ?? "").trim() !== "");
+    if (!hasData) return i + 2;
+  }
+
+  return values.length + 2;
+}
+
+export async function appendEpisodeAlerts(
+  entries: EpisodeAlertSheetEntry[]
+): Promise<{ ids: string[] }> {
+  if (entries.length === 0) return { ids: [] };
+
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSheetId();
+  const today = new Date().toISOString().slice(0, 10);
+  const rowIndex = await findNextEpisodeAlertRowIndex();
+  const ids: string[] = [];
+
+  const values = entries.map((entry, i) => {
+    const id = `EA${Date.now()}${i}`;
+    ids.push(id);
+    return [id, today, entry.show_title, entry.alert_text, "", "FALSE", today];
+  });
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${SHEET_TABS.EPISODE_ALERTS}'!A${rowIndex}:G${rowIndex + values.length - 1}`,
+      valueInputOption: "RAW",
+      requestBody: { values },
+    })
+  );
+
+  return { ids };
+}
+
 export interface RecommendationSheetEntry {
   title: string;
   release_date: string;

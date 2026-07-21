@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TV Agent",
-  description: "Track what you've watched and what Spark recommends next",
+  description: "Track what you've watched and what to watch next",
   manifest: "/manifest.webmanifest",
   icons: {
     apple: "/icons/apple-touch-icon.png",

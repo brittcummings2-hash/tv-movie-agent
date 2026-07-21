@@ -6,7 +6,7 @@ import { createToast } from "./Toast";
 
 interface AddShowModalProps {
   onClose: () => void;
-  onAdded: (item: UserRating, recommendation?: Recommendation, sparkPending?: boolean) => void;
+  onAdded: (item: UserRating, recommendation?: Recommendation) => void;
   onToast: (toast: ToastMessage) => void;
 }
 
@@ -55,16 +55,9 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not add show");
 
-      onAdded(
-        data.item as UserRating,
-        data.recommendation as Recommendation | undefined,
-        Boolean(data.sparkPending)
-      );
+      onAdded(data.item as UserRating, data.recommendation as Recommendation | undefined);
       const label = status === "watching" ? "In Progress" : "your Watch List";
-      const toastMessage = data.sparkPending
-        ? `Added ${data.item?.show_title ?? showTitle} to ${label} — Spark is profiling it`
-        : `Added ${data.item?.show_title ?? showTitle} to ${label}`;
-      onToast(createToast("success", toastMessage));
+      onToast(createToast("success", `Added ${data.item?.show_title ?? showTitle} to ${label}`));
       onClose();
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Could not add show";

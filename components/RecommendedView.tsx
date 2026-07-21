@@ -35,7 +35,7 @@ export function RecommendedView({
   if (!hasContent) {
     return (
       <div className="empty-state empty-state-compact">
-        Your watch list is empty — add something with +, or tap Spark in the header for fresh picks.
+        Your watch list is empty — add something with +, or tap Fresh picks in the header.
       </div>
     );
   }
