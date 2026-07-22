@@ -3,7 +3,7 @@ import { ensureProfileForTitle } from "@/lib/recommend";
 import { isClaudeConfigured } from "@/lib/claude";
 import { invalidateCachedPrefix } from "@/lib/sheet-cache";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /** Generate a fit-score profile for a show already in the library. */
 export async function POST(request: Request) {

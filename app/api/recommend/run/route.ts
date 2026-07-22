@@ -8,7 +8,7 @@ import {
 } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 async function isAuthorized(request: NextRequest): Promise<boolean> {
   const cronSecret = process.env.CRON_SECRET?.trim();

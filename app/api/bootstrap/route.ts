@@ -7,7 +7,9 @@ import type { EpisodeAlert, Recommendation, UserRating } from "@/lib/types";
 import { SHEET_TABS } from "@/lib/types";
 
 const CACHE_KEY = "bootstrap:all";
-const CACHE_TTL_MS = 5 * 60_000;
+// Short TTL: on serverless, invalidation after a write only reaches the
+// instance that handled the write — other instances must age out quickly.
+const CACHE_TTL_MS = 45_000;
 
 export interface BootstrapPayload {
   library: UserRating[];
@@ -15,9 +17,12 @@ export interface BootstrapPayload {
   alerts: EpisodeAlert[];
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const cached = getCached<BootstrapPayload>(CACHE_KEY);
+    // ?fresh=1 bypasses the cache — used after mutations, since another
+    // instance's cached copy won't know about the write yet.
+    const fresh = new URL(request.url).searchParams.get("fresh") === "1";
+    const cached = fresh ? null : getCached<BootstrapPayload>(CACHE_KEY);
     if (cached) {
       return NextResponse.json(cached, { headers: { "Cache-Control": "no-store" } });
     }
