@@ -17,13 +17,9 @@ interface NavProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   onAddClick: () => void;
+  onFreshPicks: () => void;
+  freshPicksBusy: boolean;
 }
-
-// Where the header "Spark" button sends her — her Gemini Spark chat.
-// Override with NEXT_PUBLIC_GEMINI_SPARK_URL.
-const GEMINI_SPARK_URL =
-  process.env.NEXT_PUBLIC_GEMINI_SPARK_URL?.trim() ||
-  "https://gemini.google.com/spark/chat/114cc9d3f16e5e99";
 
 function AddIcon() {
   return (
@@ -44,7 +40,15 @@ function SparkIcon() {
   );
 }
 
-export function Nav({ activeTab, onTabChange, searchQuery, onSearchChange, onAddClick }: NavProps) {
+export function Nav({
+  activeTab,
+  onTabChange,
+  searchQuery,
+  onSearchChange,
+  onAddClick,
+  onFreshPicks,
+  freshPicksBusy,
+}: NavProps) {
   return (
     <header className="site-header">
       <h1 className="site-title">
@@ -67,15 +71,15 @@ export function Nav({ activeTab, onTabChange, searchQuery, onSearchChange, onAdd
       </div>
 
       <div className="header-actions">
-        <a
+        <button
+          type="button"
           className="header-spark-link"
-          href={GEMINI_SPARK_URL}
-          target="_blank"
-          rel="noopener noreferrer"
+          onClick={onFreshPicks}
+          disabled={freshPicksBusy}
         >
           <SparkIcon />
-          Spark
-        </a>
+          {freshPicksBusy ? "Picking…" : "Fresh picks"}
+        </button>
         <button type="button" className="header-add-toggle" onClick={onAddClick} aria-label="Add a show">
           <AddIcon />
         </button>

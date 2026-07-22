@@ -3,8 +3,6 @@ export const SHEET_TABS = {
   RECOMMENDATIONS: "recommendations",
   DAILY_DIGEST: "daily_digest",
   EPISODE_ALERTS: "episode_alerts",
-  SETTINGS: "settings",
-  SPARK_QUEUE: "spark_queue",
 } as const;
 
 export type WatchStatus = "watched" | "watching" | "want_to_watch" | "dnf" | string;

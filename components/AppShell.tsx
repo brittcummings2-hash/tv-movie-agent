@@ -24,10 +24,6 @@ import { ToastContainer, createToast } from "./Toast";
 import { RecommendedView } from "./RecommendedView";
 import type { AppTab } from "./Nav";
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function buildPosterRequests(data: {
   library: UserRating[];
   recommendations: Recommendation[];
@@ -182,50 +178,11 @@ export function AppShell() {
   const [library, setLibrary] = useState<UserRating[]>([]);
   const [finishingItem, setFinishingItem] = useState<UserRating | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [freshPicksBusy, setFreshPicksBusy] = useState(false);
 
   const handleToast = useCallback((toast: ToastMessage) => {
     setToasts((prev) => [...prev, toast]);
   }, []);
-
-  const pollForSparkProfile = useCallback(
-    async (title: string) => {
-      for (let attempt = 0; attempt < 36; attempt++) {
-        await sleep(5000);
-        try {
-          const res = await fetch(`/api/spark/poll?title=${encodeURIComponent(title)}`);
-          const data = (await res.json()) as {
-            ready?: boolean;
-            recommendation?: Recommendation;
-          };
-          if (data.ready && data.recommendation) {
-            const recommendation = data.recommendation;
-            setRecommendations((prev) => {
-              const existing = prev.find((rec) => rec.id === recommendation.id);
-              if (existing) {
-                return prev.map((rec) => (rec.id === recommendation.id ? recommendation : rec));
-              }
-              return [recommendation, ...prev];
-            });
-            void loadPostersInBackground(
-              { library: [], recommendations: [recommendation], alerts: [] },
-              (media) => mergeLibraryMedia(media, setLibrary, setRecommendations, setAlerts)
-            );
-            handleToast(createToast("success", `Spark profile ready for ${title}`));
-            return;
-          }
-        } catch {
-          // Keep polling until timeout.
-        }
-      }
-      handleToast(
-        createToast(
-          "warning",
-          `Spark hasn't finished profiling ${title} yet — it will fill in after the next agent run`
-        )
-      );
-    },
-    [handleToast]
-  );
 
   useEffect(() => {
     if (toasts.length === 0) return;
@@ -305,7 +262,7 @@ export function AppShell() {
   );
 
   // Legacy "saved for later" items live in the Recommended tab now, alongside
-  // fresh Spark picks — they only move when she taps Start or Dismiss.
+  // fresh picks — they only move when she taps Start or Dismiss.
   const savedItems = useMemo(
     () =>
       filteredLibrary
@@ -529,14 +486,13 @@ export function AppShell() {
     }
   }
 
-  async function profileWithSpark(item: UserRating) {
+  async function profileShow(item: UserRating) {
     try {
-      const res = await fetch("/api/spark/profile", {
+      const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: item.show_title,
-          user_rating_id: item.id,
           platform: item.platform,
           release_date: item.release_date,
           watch_status: item.watch_status,
@@ -553,15 +509,32 @@ export function AppShell() {
             ? prev.map((rec) => (rec.id === recommendation.id ? recommendation : rec))
             : [recommendation, ...prev];
         });
-        handleToast(createToast("success", `Spark profiled ${item.show_title}`));
+        handleToast(createToast("success", `Profiled ${item.show_title}`));
       } else {
-        handleToast(
-          createToast("success", `Asked Spark to rate ${item.show_title} — it fills in on the next agent run`)
-        );
-        void pollForSparkProfile(item.show_title);
+        handleToast(createToast("error", `Could not profile ${item.show_title}`));
       }
-    } catch {
-      handleToast(createToast("error", "Could not reach Spark for this show"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not profile this show";
+      handleToast(createToast("error", message));
+    }
+  }
+
+  async function runFreshPicks() {
+    if (freshPicksBusy) return;
+    setFreshPicksBusy(true);
+    handleToast(createToast("info", "Finding fresh picks — this takes up to a minute"));
+    try {
+      const res = await fetch("/api/recommend/run", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      await load({ silent: true });
+      setActiveTab("recommended");
+      handleToast(createToast("success", `Added ${data.added ?? 0} fresh picks to your Watch List`));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not refresh picks";
+      handleToast(createToast("error", message));
+    } finally {
+      setFreshPicksBusy(false);
     }
   }
 
@@ -643,6 +616,8 @@ export function AppShell() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onAddClick={() => setAddOpen(true)}
+        onFreshPicks={() => void runFreshPicks()}
+        freshPicksBusy={freshPicksBusy}
       />
       <main className="container">
         {loading ? (
@@ -668,7 +643,7 @@ export function AppShell() {
                 onRate={rateShow}
                 onUpdate={updateLibraryEntry}
                 onDelete={deleteLibraryEntry}
-                onProfileShow={profileWithSpark}
+                onProfileShow={profileShow}
                 onUpdateProgress={updateProgress}
               />
             </div>
@@ -730,7 +705,7 @@ export function AppShell() {
       {addOpen && (
         <AddShowModal
           onClose={() => setAddOpen(false)}
-          onAdded={(item, recommendation, sparkPending) => {
+          onAdded={(item, recommendation) => {
             setLibrary((prev) => [item, ...prev]);
             if (recommendation) {
               setRecommendations((prev) => {
@@ -740,8 +715,6 @@ export function AppShell() {
                 }
                 return [recommendation, ...prev];
               });
-            } else if (sparkPending) {
-              void pollForSparkProfile(item.show_title);
             }
             void loadPostersInBackground(
               {

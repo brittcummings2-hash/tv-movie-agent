@@ -9,7 +9,7 @@ export interface DismissPayload {
   comments: string;
 }
 
-/** Why a rec didn't land — this feeds Spark's taste model as avoid-signal. */
+/** Why a rec didn't land — the recommendation engine treats these as avoid-signal. */
 const DISMISS_TAGS = [
   "Not My Vibe",
   "Tried It, Quit Early",
@@ -78,7 +78,7 @@ export function DismissModal({ title, onClose, onComplete }: DismissModalProps) 
           Not watching {title}?
         </h2>
         <p className="modal-copy">
-          Optional — rate it and tap why, and Spark learns what to skip next time. It
+          Optional — rate it and tap why, so future picks learn what to skip. It
           moves to your Dismissed list on the Watched tab (restore it anytime).
         </p>
         <form onSubmit={handleSubmit}>

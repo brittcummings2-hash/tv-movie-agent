@@ -53,9 +53,9 @@ export function LibraryCardActions({
               className="btn btn-ghost btn-xs library-card-profile"
               onClick={handleProfile}
               disabled={profiling}
-              title="Ask the Spark agent to rate this show"
+              title="Get a fit score for this show"
             >
-              {profiling ? "Asked Spark ✓" : "✦ Profile with Spark"}
+              {profiling ? "Profiling…" : "✦ Get fit score"}
             </button>
           )}
           {onUpdate && (

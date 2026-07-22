@@ -1,49 +1,34 @@
 import { NextResponse } from "next/server";
-import { parseWatchMessage } from "@/lib/gemini";
+import { parseWatchMessage } from "@/lib/parse-entry";
 import { attachRatingImages, mapUserRatings } from "@/lib/mappers";
 import { getCached, invalidateCachedPrefix, setCached } from "@/lib/sheet-cache";
 import { appendUserRating, deleteUserRating, getSheetRows, updateUserRating } from "@/lib/sheets";
 import { enrichStructuredEntry, type StructuredWatchEntry } from "@/lib/structured-entry";
 import { SHEET_TABS } from "@/lib/types";
 import { enrichWatchEntry } from "@/lib/watch-entry";
-import { triggerSparkProfileRequest } from "@/lib/spark-trigger";
-import { ensureSparkProfileForTitle } from "@/lib/title-profile";
+import { ensureProfileForTitle } from "@/lib/recommend";
 import type { Recommendation } from "@/lib/types";
+
+export const maxDuration = 60;
 
 const CACHE_KEY = "watched:all";
 
-async function requestSparkProfile(
-  enriched: StructuredWatchEntry,
-  userRatingId: string
-): Promise<{ recommendation: Recommendation | null; sparkPending: boolean }> {
-  const hints = {
-    title: enriched.show_title,
-    platform: enriched.platform,
-    release_date: enriched.release_date,
-    type: enriched.type_hint,
-    watch_status: enriched.watch_status,
-  };
-
-  if (process.env.GEMINI_API_KEY?.trim()) {
-    try {
-      const recommendation = await ensureSparkProfileForTitle(hints);
-      if (recommendation) {
-        return { recommendation, sparkPending: false };
-      }
-    } catch {
-      // Fall through to sheet trigger for Workspace Spark.
-    }
+/** Best-effort synchronous profile — adding the show must succeed even if this fails. */
+async function requestProfile(
+  enriched: StructuredWatchEntry
+): Promise<{ recommendation: Recommendation | null }> {
+  try {
+    const recommendation = await ensureProfileForTitle({
+      title: enriched.show_title,
+      platform: enriched.platform,
+      release_date: enriched.release_date,
+      type: enriched.type_hint,
+      watch_status: enriched.watch_status,
+    });
+    return { recommendation };
+  } catch {
+    return { recommendation: null };
   }
-
-  await triggerSparkProfileRequest({
-    title: enriched.show_title,
-    watch_status: enriched.watch_status,
-    platform: enriched.platform,
-    release_date: enriched.release_date,
-    user_rating_id: userRatingId,
-  });
-
-  return { recommendation: null, sparkPending: true };
 }
 
 function parseStructuredEntry(body: Record<string, unknown>): StructuredWatchEntry | null {
@@ -117,12 +102,12 @@ export async function POST(request: Request) {
       invalidateCachedPrefix("bootstrap:");
       invalidateCachedPrefix("recommendations:");
 
-      const { recommendation, sparkPending } = existingId
-        ? { recommendation: null, sparkPending: false }
-        : await requestSparkProfile(enriched, savedId);
+      const { recommendation } = existingId
+        ? { recommendation: null }
+        : await requestProfile(enriched);
 
       return NextResponse.json(
-        { item, entry: enriched, recommendation, sparkPending },
+        { item, entry: enriched, recommendation },
         { headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -150,21 +135,18 @@ export async function POST(request: Request) {
     invalidateCachedPrefix("bootstrap:");
     invalidateCachedPrefix("recommendations:");
 
-    const { recommendation, sparkPending } = await requestSparkProfile(
-      {
-        show_title: enriched.show_title,
-        rating: enriched.rating,
-        release_date: enriched.release_date,
-        platform: enriched.platform,
-        watch_status: enriched.watch_status,
-        comments: enriched.comments,
-        type_hint: enriched.type_hint,
-      },
-      result.id
-    );
+    const { recommendation } = await requestProfile({
+      show_title: enriched.show_title,
+      rating: enriched.rating,
+      release_date: enriched.release_date,
+      platform: enriched.platform,
+      watch_status: enriched.watch_status,
+      comments: enriched.comments,
+      type_hint: enriched.type_hint,
+    });
 
     return NextResponse.json(
-      { item, parsed: enriched, recommendation, sparkPending },
+      { item, parsed: enriched, recommendation },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {

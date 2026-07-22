@@ -1,4 +1,4 @@
-import type { ParsedWatchEntry } from "./gemini";
+import type { ParsedWatchEntry } from "./parse-entry";
 import { resolveTmdbTitle, type MediaKind } from "./tmdb";
 
 export interface EnrichedWatchEntry extends ParsedWatchEntry {
