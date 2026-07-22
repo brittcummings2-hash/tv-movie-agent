@@ -6,30 +6,8 @@ import { appendUserRating, deleteUserRating, getSheetRows, updateUserRating } fr
 import { enrichStructuredEntry, type StructuredWatchEntry } from "@/lib/structured-entry";
 import { SHEET_TABS } from "@/lib/types";
 import { enrichWatchEntry } from "@/lib/watch-entry";
-import { ensureProfileForTitle } from "@/lib/recommend";
-import type { Recommendation } from "@/lib/types";
-
-export const maxDuration = 60;
 
 const CACHE_KEY = "watched:all";
-
-/** Best-effort synchronous profile — adding the show must succeed even if this fails. */
-async function requestProfile(
-  enriched: StructuredWatchEntry
-): Promise<{ recommendation: Recommendation | null }> {
-  try {
-    const recommendation = await ensureProfileForTitle({
-      title: enriched.show_title,
-      platform: enriched.platform,
-      release_date: enriched.release_date,
-      type: enriched.type_hint,
-      watch_status: enriched.watch_status,
-    });
-    return { recommendation };
-  } catch {
-    return { recommendation: null };
-  }
-}
 
 function parseStructuredEntry(body: Record<string, unknown>): StructuredWatchEntry | null {
   const raw = body.entry;
@@ -102,12 +80,10 @@ export async function POST(request: Request) {
       invalidateCachedPrefix("bootstrap:");
       invalidateCachedPrefix("recommendations:");
 
-      const { recommendation } = existingId
-        ? { recommendation: null }
-        : await requestProfile(enriched);
-
+      // Profiling happens client-side in the background via /api/profile —
+      // the add itself stays fast.
       return NextResponse.json(
-        { item, entry: enriched, recommendation },
+        { item, entry: enriched },
         { headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -135,18 +111,8 @@ export async function POST(request: Request) {
     invalidateCachedPrefix("bootstrap:");
     invalidateCachedPrefix("recommendations:");
 
-    const { recommendation } = await requestProfile({
-      show_title: enriched.show_title,
-      rating: enriched.rating,
-      release_date: enriched.release_date,
-      platform: enriched.platform,
-      watch_status: enriched.watch_status,
-      comments: enriched.comments,
-      type_hint: enriched.type_hint,
-    });
-
     return NextResponse.json(
-      { item, parsed: enriched, recommendation },
+      { item, parsed: enriched },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {

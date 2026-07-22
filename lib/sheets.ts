@@ -126,14 +126,44 @@ function columnIndexToLetter(colIdx: number): string {
   return String.fromCharCode(64 + colIdx);
 }
 
+const headerColumnCache = new Map<string, Record<string, number>>();
+
+/**
+ * Resolve a field's 1-based column index from the tab's actual header row.
+ * The hardcoded TAB_COLUMNS map assumes a fixed layout, but externally
+ * created tabs (e.g. episode_alerts, originally written by the Spark agent)
+ * may order columns differently — trust the sheet over the map.
+ */
+async function resolveColumnIndex(tabName: string, field: string): Promise<number | null> {
+  let columns = headerColumnCache.get(tabName);
+  if (!columns) {
+    const sheets = await getSheetsClient();
+    const spreadsheetId = getSheetId();
+    const response = await withRetry(() =>
+      sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${tabName}'!1:1`,
+      })
+    );
+    const headers = (response.data.values?.[0] ?? []) as string[];
+    columns = {};
+    headers.forEach((header, i) => {
+      const key = headerToKey(header);
+      if (key && columns![key] == null) columns![key] = i + 1;
+    });
+    headerColumnCache.set(tabName, columns);
+  }
+
+  return columns[field] ?? TAB_COLUMNS[tabName]?.[field] ?? null;
+}
+
 export async function updateSheetField(
   tabName: string,
   id: string,
   field: string,
   value: string
 ): Promise<{ status: "success" | "error" }> {
-  const columns = TAB_COLUMNS[tabName];
-  const colIdx = columns?.[field];
+  const colIdx = await resolveColumnIndex(tabName, field);
   if (!colIdx) return { status: "error" };
 
   const rowIndex = await findRowIndex(tabName, 0, id);
@@ -192,8 +222,7 @@ export async function updateSheetFieldByRow(
   field: string,
   value: string
 ): Promise<{ status: "success" | "error" }> {
-  const columns = TAB_COLUMNS[tabName];
-  const colIdx = columns?.[field];
+  const colIdx = await resolveColumnIndex(tabName, field);
   if (!colIdx) return { status: "error" };
 
   const sheets = await getSheetsClient();
@@ -407,16 +436,41 @@ export async function appendEpisodeAlerts(
   const rowIndex = await findNextEpisodeAlertRowIndex();
   const ids: string[] = [];
 
+  // Lay each row out to match the tab's actual header order — the tab was
+  // originally created by the external agent and may not match our defaults.
+  const defaultOrder = ["id", "alert_date", "show_title", "alert_text", "her_rating", "seen", "created_at"];
+  const columnOrder = await Promise.all(
+    defaultOrder.map(async (field) => ({
+      field,
+      index: (await resolveColumnIndex(SHEET_TABS.EPISODE_ALERTS, field)) ?? 0,
+    }))
+  );
+  const width = Math.max(defaultOrder.length, ...columnOrder.map((c) => c.index));
+
   const values = entries.map((entry, i) => {
     const id = `EA${Date.now()}${i}`;
     ids.push(id);
-    return [id, today, entry.show_title, entry.alert_text, "", "FALSE", today];
+    const fieldValues: Record<string, string> = {
+      id,
+      alert_date: today,
+      show_title: entry.show_title,
+      alert_text: entry.alert_text,
+      her_rating: "",
+      seen: "FALSE",
+      created_at: today,
+    };
+    const row = new Array<string>(width).fill("");
+    columnOrder.forEach(({ field, index }, position) => {
+      const col = index > 0 ? index - 1 : position;
+      row[col] = fieldValues[field];
+    });
+    return row;
   });
 
   await withRetry(() =>
     sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `'${SHEET_TABS.EPISODE_ALERTS}'!A${rowIndex}:G${rowIndex + values.length - 1}`,
+      range: `'${SHEET_TABS.EPISODE_ALERTS}'!A${rowIndex}:${columnIndexToLetter(width)}${rowIndex + values.length - 1}`,
       valueInputOption: "RAW",
       requestBody: { values },
     })
