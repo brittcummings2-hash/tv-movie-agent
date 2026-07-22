@@ -122,6 +122,7 @@ export async function parseWatchMessage(message: string): Promise<ParsedWatchEnt
         "Map: finished/watched -> watched; in the middle of/currently watching -> watching; want to watch -> want_to_watch.",
       user: text,
       maxTokens: 1024,
+      effort: "low",
     });
 
     const show_title = sanitizeShowTitle(String(parsed.show_title ?? ""));

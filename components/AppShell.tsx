@@ -525,14 +525,21 @@ export function AppShell() {
     handleToast(createToast("info", "Finding fresh picks — this takes up to a minute"));
     try {
       const res = await fetch("/api/recommend/run", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
+      // Gateway timeouts return HTML, not JSON — don't let parsing mask them.
+      const data = (await res.json().catch(() => ({}))) as { added?: number; error?: string };
+      if (!res.ok) {
+        throw new Error(
+          data.error ?? (res.status === 504 ? "The picks run timed out — try again in a minute" : "Could not refresh picks")
+        );
+      }
       await load({ silent: true });
       setActiveTab("recommended");
       handleToast(createToast("success", `Added ${data.added ?? 0} fresh picks to your Watch List`));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not refresh picks";
       handleToast(createToast("error", message));
+      // The run may still have landed rows server-side before the timeout.
+      void load({ silent: true });
     } finally {
       setFreshPicksBusy(false);
     }
@@ -705,23 +712,13 @@ export function AppShell() {
       {addOpen && (
         <AddShowModal
           onClose={() => setAddOpen(false)}
-          onAdded={(item, recommendation) => {
+          onAdded={(item) => {
             setLibrary((prev) => [item, ...prev]);
-            if (recommendation) {
-              setRecommendations((prev) => {
-                const existing = prev.find((rec) => rec.id === recommendation.id);
-                if (existing) {
-                  return prev.map((rec) => (rec.id === recommendation.id ? recommendation : rec));
-                }
-                return [recommendation, ...prev];
-              });
-            }
+            // Fit-score profile generates in the background; the card appears
+            // immediately and the profile merges in when ready.
+            void profileShow(item);
             void loadPostersInBackground(
-              {
-                library: [item],
-                recommendations: recommendation ? [recommendation] : [],
-                alerts: [],
-              },
+              { library: [item], recommendations: [], alerts: [] },
               (media) => mergeLibraryMedia(media, setLibrary, setRecommendations, setAlerts)
             );
             if (item.watch_status.toLowerCase() === "watching") {

@@ -42,6 +42,7 @@ export async function buildTasteSummary(): Promise<{
   libraryJson: string;
   excludedTitles: string[];
   activeRecTitles: string[];
+  dismissedFeedbackJson: string;
 }> {
   const [ratingsRows, recRows] = await Promise.all([
     getSheetRows(SHEET_TABS.USER_RATINGS),
@@ -79,10 +80,23 @@ export async function buildTasteSummary(): Promise<{
     ),
   ];
 
+  // Dismissed recs with feedback are strong avoid-signal — the why matters,
+  // not just the title exclusion.
+  const dismissedFeedback = recommendations
+    .filter((rec) => rec.user_action.trim().toLowerCase() === "dismiss")
+    .slice(-20)
+    .map((rec) => ({
+      title: rec.title,
+      rating: rec.user_rating || undefined,
+      reasons: rec.user_reasons || undefined,
+      comments: rec.user_comments || undefined,
+    }));
+
   return {
     libraryJson: JSON.stringify(tasteRows, null, 2),
     excludedTitles,
     activeRecTitles: activeRecommendations.map((rec) => rec.title),
+    dismissedFeedbackJson: JSON.stringify(dismissedFeedback, null, 2),
   };
 }
 
@@ -136,7 +150,8 @@ export interface RecommendationRunResult {
 
 /** Generate fresh recommendation rows — replaces the external Spark agent's refresh. */
 export async function runRecommendationRefresh(): Promise<RecommendationRunResult> {
-  const { libraryJson, excludedTitles, activeRecTitles } = await buildTasteSummary();
+  const { libraryJson, excludedTitles, activeRecTitles, dismissedFeedbackJson } =
+    await buildTasteSummary();
   const excludedBlock = excludedTitles.slice(0, 120).join("\n- ");
   const today = new Date().toISOString().slice(0, 10);
 
@@ -153,9 +168,12 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
     user:
       `Today's date: ${today}\n\n` +
       `Her ratings library (most recent / highest rated):\n${libraryJson}\n\n` +
+      `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
       `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
       `Excluded titles (never recommend):\n- ${excludedBlock}`,
-    webSearches: 4,
+    // Must finish inside Vercel's 60s function window.
+    webSearches: 3,
+    effort: "medium",
   });
 
   const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
@@ -221,7 +239,9 @@ async function generateTitleProfile(hints: TitleProfileHints): Promise<Recommend
       `Title to profile: "${title}"` +
       (metadata ? `\nKnown metadata: ${metadata}` : "") +
       `\n\nHer ratings library (most recent / highest rated):\n${libraryJson}`,
-    webSearches: 2,
+    webSearches: 1,
+    maxTokens: 4096,
+    effort: "low",
   });
 
   const draft = normalizeRecommendationDraft(

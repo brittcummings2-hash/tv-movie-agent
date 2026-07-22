@@ -26,6 +26,8 @@ export interface ClaudeJsonRequest {
   /** Allow the model to ground buzz/availability claims via web search. */
   webSearches?: number;
   maxTokens?: number;
+  /** "low" keeps latency-sensitive calls fast; omit for the default depth. */
+  effort?: "low" | "medium" | "high";
 }
 
 /**
@@ -47,6 +49,7 @@ export async function askClaudeJson<T>(request: ClaudeJsonRequest): Promise<T> {
     model: getModel(),
     max_tokens: request.maxTokens ?? 8192,
     thinking: { type: "adaptive" },
+    ...(request.effort ? { output_config: { effort: request.effort } } : {}),
     system: request.system,
     tools,
     messages: [{ role: "user", content: request.user }],

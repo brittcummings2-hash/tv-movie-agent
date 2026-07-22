@@ -1,12 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import type { ToastMessage, UserRating, Recommendation } from "@/lib/types";
+import type { ToastMessage, UserRating } from "@/lib/types";
 import { createToast } from "./Toast";
 
 interface AddShowModalProps {
   onClose: () => void;
-  onAdded: (item: UserRating, recommendation?: Recommendation) => void;
+  onAdded: (item: UserRating) => void;
   onToast: (toast: ToastMessage) => void;
 }
 
@@ -55,9 +55,11 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not add show");
 
-      onAdded(data.item as UserRating, data.recommendation as Recommendation | undefined);
+      onAdded(data.item as UserRating);
       const label = status === "watching" ? "In Progress" : "your Watch List";
-      onToast(createToast("success", `Added ${data.item?.show_title ?? showTitle} to ${label}`));
+      onToast(
+        createToast("success", `Added ${data.item?.show_title ?? showTitle} to ${label} — profiling it in the background`)
+      );
       onClose();
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Could not add show";
