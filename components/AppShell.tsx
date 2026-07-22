@@ -190,11 +190,11 @@ export function AppShell() {
     return () => clearTimeout(timer);
   }, [toasts]);
 
-  const load = useCallback(async (options?: { silent?: boolean }) => {
+  const load = useCallback(async (options?: { silent?: boolean; fresh?: boolean }) => {
     if (!options?.silent) setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch("/api/bootstrap");
+      const res = await fetch(options?.fresh ? "/api/bootstrap?fresh=1" : "/api/bootstrap");
       const data = (await res.json()) as {
         alerts?: EpisodeAlert[];
         recommendations?: Recommendation[];
@@ -532,14 +532,14 @@ export function AppShell() {
           data.error ?? (res.status === 504 ? "The picks run timed out — try again in a minute" : "Could not refresh picks")
         );
       }
-      await load({ silent: true });
+      await load({ silent: true, fresh: true });
       setActiveTab("recommended");
       handleToast(createToast("success", `Added ${data.added ?? 0} fresh picks to your Watch List`));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not refresh picks";
       handleToast(createToast("error", message));
       // The run may still have landed rows server-side before the timeout.
-      void load({ silent: true });
+      void load({ silent: true, fresh: true });
     } finally {
       setFreshPicksBusy(false);
     }
