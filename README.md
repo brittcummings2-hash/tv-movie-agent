@@ -27,9 +27,10 @@ npm run dev
   add, and smarter quick-add parsing. Without it the tracker still works;
   recommendations and profiles just won't generate.
 - `ANTHROPIC_MODEL` — optional; defaults to `claude-opus-4-8`
-- `PORTAL_PASSWORD` — login gate. **Required in production** — the deployed app
-  refuses to serve without it (otherwise your library and sheet write access
-  would be public).
+- `PORTAL_PASSWORD` — optional login gate. Set it to require sign-in; remove
+  it to serve the app openly. Without it, anyone with the URL can view the
+  library, write to the sheet through the app, and trigger the
+  recommendation engine (which spends Anthropic credits).
 - `CRON_SECRET` — optional; when set, Vercel sends it with cron requests and
   the cron-hit endpoints require it (or a logged-in session).
 
