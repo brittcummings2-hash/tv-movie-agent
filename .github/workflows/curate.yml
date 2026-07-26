@@ -95,9 +95,15 @@ jobs:
                 ;;
               inspect)
                 title=$(echo "$op" | jq -r '.title')
-                jq --arg t "$title" \
-                  '[.library[] | select(.show_title | ascii_downcase | contains($t | ascii_downcase))]' \
-                  /tmp/bootstrap.json
+                curl -sS -m 30 "$APP/api/bootstrap?fresh=1" | jq --arg t "$title" \
+                  '[.library[] | select(.show_title | ascii_downcase | contains($t | ascii_downcase))]'
+                ;;
+              alert_seen)
+                id=$(echo "$op" | jq -r '.id')
+                resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \
+                  -d "{\"id\":\"$id\"}" "$APP/api/alerts")
+                echo "alert $id seen -> $resp"
+                echo "$resp" | grep -q '"ok":true' || fail=1
                 ;;
               get)
                 path=$(echo "$op" | jq -r '.path')

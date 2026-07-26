@@ -248,15 +248,13 @@ async function findNextUserRatingRowIndex(): Promise<number> {
   const response = await withRetry(() =>
     sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${SHEET_TABS.USER_RATINGS}'!A2:J`,
+      range: `'${SHEET_TABS.USER_RATINGS}'!A2:A`,
     })
   );
 
   const values = response.data.values ?? [];
   for (let i = 0; i < values.length; i++) {
-    const row = values[i] ?? [];
-    const hasData = row.some((cell) => String(cell ?? "").trim() !== "");
-    if (!hasData) return i + 2;
+    if (String(values[i]?.[0] ?? "").trim() === "") return i + 2;
   }
 
   return values.length + 2;
@@ -404,6 +402,12 @@ export interface EpisodeAlertSheetEntry {
   alert_text: string;
 }
 
+/**
+ * First row whose ID cell is empty. Keyed off column A rather than
+ * whole-row emptiness: stray fill-downs in other columns (e.g. a FALSE
+ * dragged to the bottom of the seen column) would otherwise make every
+ * row look occupied and push appends past the sheet's grid limit.
+ */
 async function findNextEpisodeAlertRowIndex(): Promise<number> {
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
@@ -411,15 +415,13 @@ async function findNextEpisodeAlertRowIndex(): Promise<number> {
   const response = await withRetry(() =>
     sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${SHEET_TABS.EPISODE_ALERTS}'!A2:G`,
+      range: `'${SHEET_TABS.EPISODE_ALERTS}'!A2:A`,
     })
   );
 
   const values = response.data.values ?? [];
   for (let i = 0; i < values.length; i++) {
-    const row = values[i] ?? [];
-    const hasData = row.some((cell) => String(cell ?? "").trim() !== "");
-    if (!hasData) return i + 2;
+    if (String(values[i]?.[0] ?? "").trim() === "") return i + 2;
   }
 
   return values.length + 2;
@@ -502,15 +504,13 @@ async function findNextRecommendationRowIndex(): Promise<number> {
   const response = await withRetry(() =>
     sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${SHEET_TABS.RECOMMENDATIONS}'!A2:T`,
+      range: `'${SHEET_TABS.RECOMMENDATIONS}'!A2:A`,
     })
   );
 
   const values = response.data.values ?? [];
   for (let i = 0; i < values.length; i++) {
-    const row = values[i] ?? [];
-    const hasData = row.some((cell) => String(cell ?? "").trim() !== "");
-    if (!hasData) return i + 2;
+    if (String(values[i]?.[0] ?? "").trim() === "") return i + 2;
   }
 
   return values.length + 2;
