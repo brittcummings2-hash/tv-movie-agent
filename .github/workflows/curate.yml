@@ -93,6 +93,17 @@ jobs:
                   fail=1
                 fi
                 ;;
+              inspect)
+                title=$(echo "$op" | jq -r '.title')
+                jq --arg t "$title" \
+                  '[.library[] | select(.show_title | ascii_downcase | contains($t | ascii_downcase))]' \
+                  /tmp/bootstrap.json
+                ;;
+              get)
+                path=$(echo "$op" | jq -r '.path')
+                resp=$(curl -sS -m 120 "$APP$path")
+                echo "GET $path -> $(echo "$resp" | head -c 500)"
+                ;;
               *)
                 echo "::error::unknown op kind: $op"
                 fail=1
