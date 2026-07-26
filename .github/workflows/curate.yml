@@ -1,7 +1,13 @@
 name: Curate watch list
 
-# One-off list maintenance driven through the app's own API. Runs from a
+# Generic list maintenance driven through the app's own API. Runs from a
 # GitHub Actions runner because it has open egress to the deployed app.
+#
+# `ops` is a JSON array of operations:
+#   {"kind":"rec","id":"R011","fields":{"user_action":"accept"}}
+#   {"kind":"lib","title":"Silo","fields":{"watch_status":"dnf"}}   (or "id":"UR...")
+#   {"kind":"add","entry":{"show_title":"...","rating":5,"watch_status":"watched",...}}
+# "add" falls back to patching the existing library row if the title already exists.
 on:
   workflow_dispatch:
     inputs:
@@ -9,15 +15,19 @@ on:
         description: "Base URL of the deployed app (no trailing slash)"
         required: true
         default: "https://tv-movie-agent.vercel.app"
+      ops:
+        description: "JSON array of operations"
+        required: true
 
 jobs:
   curate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Apply curation
+      - name: Apply operations
         env:
           APP: ${{ inputs.app_url }}
+          OPS: ${{ inputs.ops }}
         run: |
           set -u
           APP="${APP%/}"
@@ -32,54 +42,67 @@ jobs:
             exit 1
           fi
           echo "$body" > /tmp/bootstrap.json
-          echo "Bootstrap OK: $(jq '.library|length' /tmp/bootstrap.json) library rows, $(jq '.recommendations|length' /tmp/bootstrap.json) recs"
+          echo "$OPS" | jq -e 'type == "array"' > /dev/null || { echo "::error::ops must be a JSON array"; exit 1; }
 
           fail=0
-          patch_rec() { # id, json-fields
-            resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \
-              -d "{\"id\":\"$1\",\"fields\":$2}" "$APP/api/recommendations")
-            echo "rec $1 -> $resp"
-            echo "$resp" | grep -q '"ok":true' || fail=1
-          }
-          patch_lib() { # id, json-fields
-            resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \
-              -d "{\"id\":\"$1\",\"fields\":$2}" "$APP/api/watched")
-            echo "lib $1 -> $resp"
-            echo "$resp" | grep -q '"ok":true' || fail=1
-          }
+          count=$(echo "$OPS" | jq 'length')
+          for i in $(seq 0 $((count - 1))); do
+            op=$(echo "$OPS" | jq -c ".[$i]")
+            kind=$(echo "$op" | jq -r '.kind')
 
-          echo "== Dismiss misfit recommendations =="
-          patch_rec "R003" '{"user_action":"dismiss","user_reasons":"Not My Vibe","user_comments":"Cartel/narco plot - currently avoiding"}'
-          patch_rec "R004" '{"user_action":"dismiss","user_reasons":"Not My Vibe","user_comments":"Non-crime docuseries, wrong subject"}'
-          patch_rec "R018" '{"user_action":"dismiss","user_comments":"Duplicate - already watching The Capture"}'
-          patch_rec "R001" '{"user_action":"dismiss","user_reasons":"Too Slow to Start","user_comments":"Romance-heavy, never started"}'
+            case "$kind" in
+              rec)
+                id=$(echo "$op" | jq -r '.id')
+                fields=$(echo "$op" | jq -c '.fields')
+                resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \
+                  -d "{\"id\":\"$id\",\"fields\":$fields}" "$APP/api/recommendations")
+                echo "rec $id -> $resp"
+                echo "$resp" | grep -q '"ok":true' || fail=1
+                ;;
+              lib|add)
+                if [ "$kind" = "add" ]; then
+                  title=$(echo "$op" | jq -r '.entry.show_title')
+                else
+                  title=$(echo "$op" | jq -r '.title // empty')
+                fi
+                id=$(echo "$op" | jq -r '.id // empty')
+                if [ -z "$id" ] && [ -n "$title" ]; then
+                  id=$(jq -r --arg t "$title" \
+                    '[.library[] | select(.show_title | ascii_downcase == ($t | ascii_downcase))][0].id // empty' \
+                    /tmp/bootstrap.json)
+                fi
 
-          echo "== Silo -> DNF (too sci-fi) =="
-          silo_id=$(jq -r '[.library[] | select(.show_title | test("silo"; "i"))][0].id // empty' /tmp/bootstrap.json)
-          if [ -n "$silo_id" ]; then
-            patch_lib "$silo_id" '{"watch_status":"dnf","why_reasons":"Tried It, Quit Early","comments":"Too sci-fi"}'
-          else
-            echo "::warning::Silo not found in library - skipped"
-          fi
-
-          echo "== Sirens -> watched, 5 stars =="
-          sirens_id=$(jq -r '[.library[] | select(.show_title | test("^sirens$"; "i"))][0].id // empty' /tmp/bootstrap.json)
-          if [ -n "$sirens_id" ]; then
-            patch_lib "$sirens_id" '{"watch_status":"watched","rating":5}'
-          else
-            resp=$(curl -sS -m 60 -X POST -H 'Content-Type: application/json' \
-              -d '{"entry":{"show_title":"Sirens","rating":5,"release_date":"2025-05","platform":"Netflix","watch_status":"watched","comments":"Loved it"}}' \
-              "$APP/api/watched")
-            echo "add Sirens -> $(echo "$resp" | head -c 300)"
-            echo "$resp" | grep -q '"show_title"' || fail=1
-          fi
-          patch_rec "R033" '{"user_action":"accept"}'
+                if [ "$kind" = "add" ] && [ -z "$id" ]; then
+                  entry=$(echo "$op" | jq -c '.entry')
+                  resp=$(curl -sS -m 60 -X POST -H 'Content-Type: application/json' \
+                    -d "{\"entry\":$entry}" "$APP/api/watched")
+                  echo "add '$title' -> $(echo "$resp" | head -c 250)"
+                  echo "$resp" | grep -q '"show_title"' || fail=1
+                elif [ -n "$id" ]; then
+                  if [ "$kind" = "add" ]; then
+                    fields=$(echo "$op" | jq -c '.entry | {watch_status, rating, comments} | with_entries(select(.value != null))')
+                  else
+                    fields=$(echo "$op" | jq -c '.fields')
+                  fi
+                  resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \
+                    -d "{\"id\":\"$id\",\"fields\":$fields}" "$APP/api/watched")
+                  echo "lib $id ($title) -> $resp"
+                  echo "$resp" | grep -q '"ok":true' || fail=1
+                else
+                  echo "::error::lib op needs an id or a title found in the library: $op"
+                  fail=1
+                fi
+                ;;
+              *)
+                echo "::error::unknown op kind: $op"
+                fail=1
+                ;;
+            esac
+          done
 
           echo "== Verify =="
           curl -sS -m 30 "$APP/api/bootstrap?fresh=1" > /tmp/after.json
           echo "Active (unactioned) recs now:"
           jq -r '.recommendations[] | select(.user_action == "") | "\(.id) \(.title)"' /tmp/after.json
-          echo "Silo status: $(jq -r '[.library[] | select(.show_title|test("silo";"i"))][0].watch_status // "n/a"' /tmp/after.json)"
-          echo "Sirens: $(jq -r '[.library[] | select(.show_title|test("^sirens$";"i"))][0] | "\(.watch_status // "missing") rating=\(.rating // "-")"' /tmp/after.json)"
 
           exit $fail
