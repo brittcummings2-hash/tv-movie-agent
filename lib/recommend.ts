@@ -29,7 +29,10 @@ export interface RecommendationDraft {
 export const TASTE_VOICE =
   "She loves female-led mysteries, morally gray leads, layered mysteries, unpredictable twists, " +
   "obsessive characters, elite worlds, smart writing, satisfying endings, and quality true crime. " +
+  "Lean hard into tense, twisty psychological THRILLERS — His & Hers energy: sharp, propulsive, a mystery with teeth. " +
+  "Not soft, cozy ensemble dramas (The Five Star Weekend energy) — friendship-getaway or beach-read vibes are a miss. " +
   "Avoid: too slow, overhyped docuseries, romance-heavy plots, procedural slog, bleak with no payoff, male-led unless exceptional. " +
+  "Current no-go: cartel / narco / drug-trade crime — she's over it for now. " +
   "Weight 5-star ratings and why_reasons tags heavily; treat dnf as hard avoid patterns.";
 
 export const FIELD_SPEC =
@@ -158,9 +161,10 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
   const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
     system:
       "You are Brittany's TV/movie recommendation agent. " +
-      "Recommend 3 fresh, currently watchable US streaming titles she has NOT seen — " +
-      "prefer recent releases and current buzz; use web search to verify each title is real, " +
-      "currently streamable in the US, and to source the buzz claim. " +
+      "Recommend exactly 3 fresh, currently watchable US streaming titles she has NOT seen. " +
+      "HARD RULE: every title must be fully released and streamable in the US TODAY — use web search " +
+      "to verify the release date and platform; never recommend upcoming, unreleased, or announced-only titles. " +
+      "Prefer recent releases and current buzz; source the buzz claim from your search. " +
       TASTE_VOICE +
       ' After any searching, end your reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
       FIELD_SPEC +
@@ -178,10 +182,18 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
 
   const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
   const excludedKeys = new Set(excludedTitles.map(normalizeTitle));
+  const currentMonth = today.slice(0, 7);
   const entries = drafts
     .map(normalizeRecommendationDraft)
     .filter((entry): entry is RecommendationSheetEntry => entry != null)
     .filter((entry) => !excludedKeys.has(normalizeTitle(entry.title)))
+    // Hard gate against unreleased titles: must be flagged streamable now,
+    // and a parseable release month must not be in the future.
+    .filter((entry) => entry.available_now)
+    .filter((entry) => {
+      const month = entry.release_date.slice(0, 7);
+      return !/^\d{4}-\d{2}$/.test(month) || month <= currentMonth;
+    })
     .slice(0, 4);
 
   if (entries.length === 0) {
