@@ -31,7 +31,8 @@ export const TASTE_VOICE =
   "obsessive characters, elite worlds, smart writing, satisfying endings, and quality true crime. " +
   "Lean hard into tense, twisty psychological THRILLERS — His & Hers energy: sharp, propulsive, a mystery with teeth. " +
   "Not soft, cozy ensemble dramas (The Five Star Weekend energy) — friendship-getaway or beach-read vibes are a miss. " +
-  "Avoid: too slow, overhyped docuseries, romance-heavy plots, procedural slog, bleak with no payoff, male-led unless exceptional. " +
+  "Nuance: wealthy/coastal settings are fine when the tone is dark — she loved Sirens and The White Lotus; it's softness she avoids, not luxury. " +
+  "Avoid: too slow, overhyped docuseries, romance-heavy plots, procedural slog, bleak with no payoff, male-led unless exceptional, sci-fi. " +
   "Current no-go: cartel / narco / drug-trade crime — she's over it for now. " +
   "Weight 5-star ratings and why_reasons tags heavily; treat dnf as hard avoid patterns.";
 
