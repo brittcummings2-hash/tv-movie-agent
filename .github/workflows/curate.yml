@@ -1,0 +1,85 @@
+name: Curate watch list
+
+# One-off list maintenance driven through the app's own API. Runs from a
+# GitHub Actions runner because it has open egress to the deployed app.
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: "Base URL of the deployed app (no trailing slash)"
+        required: true
+        default: "https://tv-movie-agent.vercel.app"
+
+jobs:
+  curate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Apply curation
+        env:
+          APP: ${{ inputs.app_url }}
+        run: |
+          set -u
+          APP="${APP%/}"
+
+          echo "== Probe =="
+          probe=$(curl -sS -m 30 -w '\n%{http_code}' "$APP/api/bootstrap?fresh=1" || echo -e "\n000")
+          code=$(echo "$probe" | tail -1)
+          body=$(echo "$probe" | sed '$d')
+          if [ "$code" != "200" ]; then
+            echo "::error::App unreachable or protected — HTTP $code"
+            echo "$body" | head -c 600
+            exit 1
+          fi
+          echo "$body" > /tmp/bootstrap.json
+          echo "Bootstrap OK: $(jq '.library|length' /tmp/bootstrap.json) library rows, $(jq '.recommendations|length' /tmp/bootstrap.json) recs"
+
+          fail=0
+          patch_rec() { # id, json-fields
+            resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \
+              -d "{\"id\":\"$1\",\"fields\":$2}" "$APP/api/recommendations")
+            echo "rec $1 -> $resp"
+            echo "$resp" | grep -q '"ok":true' || fail=1
+          }
+          patch_lib() { # id, json-fields
+            resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \
+              -d "{\"id\":\"$1\",\"fields\":$2}" "$APP/api/watched")
+            echo "lib $1 -> $resp"
+            echo "$resp" | grep -q '"ok":true' || fail=1
+          }
+
+          echo "== Dismiss misfit recommendations =="
+          patch_rec "R003" '{"user_action":"dismiss","user_reasons":"Not My Vibe","user_comments":"Cartel/narco plot - currently avoiding"}'
+          patch_rec "R004" '{"user_action":"dismiss","user_reasons":"Not My Vibe","user_comments":"Non-crime docuseries, wrong subject"}'
+          patch_rec "R018" '{"user_action":"dismiss","user_comments":"Duplicate - already watching The Capture"}'
+          patch_rec "R001" '{"user_action":"dismiss","user_reasons":"Too Slow to Start","user_comments":"Romance-heavy, never started"}'
+
+          echo "== Silo -> DNF (too sci-fi) =="
+          silo_id=$(jq -r '[.library[] | select(.show_title | test("silo"; "i"))][0].id // empty' /tmp/bootstrap.json)
+          if [ -n "$silo_id" ]; then
+            patch_lib "$silo_id" '{"watch_status":"dnf","why_reasons":"Tried It, Quit Early","comments":"Too sci-fi"}'
+          else
+            echo "::warning::Silo not found in library - skipped"
+          fi
+
+          echo "== Sirens -> watched, 5 stars =="
+          sirens_id=$(jq -r '[.library[] | select(.show_title | test("^sirens$"; "i"))][0].id // empty' /tmp/bootstrap.json)
+          if [ -n "$sirens_id" ]; then
+            patch_lib "$sirens_id" '{"watch_status":"watched","rating":5}'
+          else
+            resp=$(curl -sS -m 60 -X POST -H 'Content-Type: application/json' \
+              -d '{"entry":{"show_title":"Sirens","rating":5,"release_date":"2025-05","platform":"Netflix","watch_status":"watched","comments":"Loved it"}}' \
+              "$APP/api/watched")
+            echo "add Sirens -> $(echo "$resp" | head -c 300)"
+            echo "$resp" | grep -q '"show_title"' || fail=1
+          fi
+          patch_rec "R033" '{"user_action":"accept"}'
+
+          echo "== Verify =="
+          curl -sS -m 30 "$APP/api/bootstrap?fresh=1" > /tmp/after.json
+          echo "Active (unactioned) recs now:"
+          jq -r '.recommendations[] | select(.user_action == "") | "\(.id) \(.title)"' /tmp/after.json
+          echo "Silo status: $(jq -r '[.library[] | select(.show_title|test("silo";"i"))][0].watch_status // "n/a"' /tmp/after.json)"
+          echo "Sirens: $(jq -r '[.library[] | select(.show_title|test("^sirens$";"i"))][0] | "\(.watch_status // "missing") rating=\(.rating // "-")"' /tmp/after.json)"
+
+          exit $fail
