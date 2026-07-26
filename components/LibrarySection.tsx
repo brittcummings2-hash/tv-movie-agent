@@ -91,10 +91,12 @@ export function LibrarySection({
           const statusLine = showNextEpisode
             ? formatNextEpisode(item.next_episode_air_date, item.series_status)
             : null;
-          // Episode progress only makes sense on TV shows she's actively watching.
+          // Episode progress applies to any TV show she's keeping up with —
+          // including caught_up shows, so a new drop can be checked off.
           const isMovie = (item.media_type ?? "").toLowerCase() === "movie";
+          const progressStatuses = ["watching", "caught_up"];
           const progress =
-            onUpdateProgress && item.watch_status.toLowerCase() === "watching" && !isMovie
+            onUpdateProgress && progressStatuses.includes(item.watch_status.toLowerCase()) && !isMovie
               ? {
                   season: item.current_season,
                   episode: item.current_episode,
