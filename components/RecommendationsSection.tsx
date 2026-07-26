@@ -10,20 +10,29 @@ import { SectionLabel } from "./SectionLabel";
 import { StarRating } from "./StarRating";
 import { createToast } from "./Toast";
 
-interface RecommendationsSectionProps {
+interface WatchListSectionProps {
   items: Recommendation[];
+  savedItems: UserRating[];
+  recommendations: Recommendation[];
   onToast: (toast: ToastMessage) => void;
   onSave: (item: Recommendation, status: "watching") => Promise<void>;
   onDismiss: (id: string, rating: number, reasons: string, comments: string) => void;
+  onStartSaved: (item: UserRating) => Promise<void>;
+  onDismissSaved: (item: UserRating, payload: DismissPayload) => Promise<void>;
 }
 
-export function RecommendationsSection({
+/** Fresh picks and saved-for-later shows in one continuous grid — no section breaks. */
+export function WatchListSection({
   items,
+  savedItems,
+  recommendations,
   onToast,
   onSave,
   onDismiss,
-}: RecommendationsSectionProps) {
-  if (items.length === 0) {
+  onStartSaved,
+  onDismissSaved,
+}: WatchListSectionProps) {
+  if (items.length === 0 && savedItems.length === 0) {
     return null;
   }
 
@@ -38,6 +47,17 @@ export function RecommendationsSection({
             onSave={onSave}
             onDismiss={onDismiss}
             onToast={onToast}
+          />
+        ))}
+        {savedItems.map((item) => (
+          <SavedItemCard
+            key={item.id}
+            item={item}
+            recommendation={recommendations.find(
+              (rec) => rec.title.toLowerCase() === item.show_title.toLowerCase()
+            )}
+            onStart={onStartSaved}
+            onDismiss={onDismissSaved}
           />
         ))}
       </MediaCardGrid>
@@ -115,45 +135,6 @@ function RecCard({
         />
       )}
     </>
-  );
-}
-
-interface SavedItemsSectionProps {
-  items: UserRating[];
-  recommendations: Recommendation[];
-  onStart: (item: UserRating) => Promise<void>;
-  onDismiss: (item: UserRating, payload: DismissPayload) => Promise<void>;
-}
-
-/**
- * Legacy "saved for later" library items, shown in the Recommended tab with the
- * same two actions as fresh picks. Nothing moves on its own — she taps Start or
- * Dismiss.
- */
-export function SavedItemsSection({
-  items,
-  recommendations,
-  onStart,
-  onDismiss,
-}: SavedItemsSectionProps) {
-  if (items.length === 0) return null;
-
-  return (
-    <section className="section-block section-block--for-you">
-      <MediaCardGrid>
-        {items.map((item) => (
-          <SavedItemCard
-            key={item.id}
-            item={item}
-            recommendation={recommendations.find(
-              (rec) => rec.title.toLowerCase() === item.show_title.toLowerCase()
-            )}
-            onStart={onStart}
-            onDismiss={onDismiss}
-          />
-        ))}
-      </MediaCardGrid>
-    </section>
   );
 }
 

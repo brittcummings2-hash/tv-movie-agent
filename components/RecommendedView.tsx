@@ -3,7 +3,7 @@
 import type { EpisodeAlert, Recommendation, ToastMessage, UserRating } from "@/lib/types";
 import type { DismissPayload } from "./DismissModal";
 import { EpisodeAlertsSection } from "./EpisodeAlertsSection";
-import { RecommendationsSection, SavedItemsSection } from "./RecommendationsSection";
+import { WatchListSection } from "./RecommendationsSection";
 
 interface RecommendedViewProps {
   alerts: EpisodeAlert[];
@@ -43,17 +43,15 @@ export function RecommendedView({
   return (
     <>
       <EpisodeAlertsSection items={alerts} onToast={onToast} onDismiss={onDismissAlert} />
-      <SavedItemsSection
-        items={savedItems}
-        recommendations={allRecommendations}
-        onStart={onStartSaved}
-        onDismiss={onDismissSaved}
-      />
-      <RecommendationsSection
+      <WatchListSection
         items={recommendations}
+        savedItems={savedItems}
+        recommendations={allRecommendations}
         onToast={onToast}
         onSave={onSaveRec}
         onDismiss={onDismissRec}
+        onStartSaved={onStartSaved}
+        onDismissSaved={onDismissSaved}
       />
     </>
   );
