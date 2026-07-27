@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { EpisodeAlert, Recommendation, ToastMessage, UserRating, WatchStatus } from "@/lib/types";
 import {
   filterActiveRecommendations,
@@ -190,9 +190,12 @@ export function AppShell() {
     return () => clearTimeout(timer);
   }, [toasts]);
 
+  const lastLoadAtRef = useRef(0);
+
   const load = useCallback(async (options?: { silent?: boolean; fresh?: boolean }) => {
     if (!options?.silent) setLoading(true);
     setLoadError(null);
+    lastLoadAtRef.current = Date.now();
     try {
       const res = await fetch(options?.fresh ? "/api/bootstrap?fresh=1" : "/api/bootstrap");
       const data = (await res.json()) as {
@@ -233,6 +236,23 @@ export function AppShell() {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // iOS keeps the PWA frozen in the background for days — without this, a
+  // resumed session shows whatever the sheet looked like when it was last
+  // opened. Refetch whenever the app returns to the foreground.
+  useEffect(() => {
+    function refreshOnReturn() {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadAtRef.current < 30_000) return;
+      void load({ silent: true, fresh: true });
+    }
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
+    };
   }, [load]);
 
   const activeRecommendations = useMemo(
