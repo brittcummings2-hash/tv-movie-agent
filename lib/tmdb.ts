@@ -420,6 +420,45 @@ async function fetchDetail(
   };
 }
 
+export interface TitleCandidate {
+  tmdbId: number;
+  title: string;
+  year: number | null;
+  kind: MediaKind;
+  posterUrl: string | null;
+  overview: string;
+  releaseDate: string;
+}
+
+/** Top TMDB matches for a typed title — lets the user disambiguate before adding. */
+export async function searchTitleCandidates(query: string): Promise<TitleCandidate[]> {
+  const [tv, movies] = await Promise.all([
+    searchTmdb(query, "tv"),
+    searchTmdb(query, "movie"),
+  ]);
+
+  const pool = [
+    ...tv.slice(0, 6).map((item) => ({ item, kind: "tv" as MediaKind })),
+    ...movies.slice(0, 6).map((item) => ({ item, kind: "movie" as MediaKind })),
+  ];
+
+  return pool
+    .map(({ item, kind }) => ({
+      tmdbId: item.id ?? 0,
+      title: ((kind === "tv" ? item.name : item.title) ?? "").trim(),
+      year: getItemYear(item, kind),
+      kind,
+      posterUrl: buildPosterUrl(item.poster_path, "w154"),
+      overview: String(item.overview ?? "").slice(0, 160),
+      releaseDate: formatReleaseDate(kind === "tv" ? item.first_air_date : item.release_date),
+      popularity: (item.popularity ?? 0) + (item.vote_count ?? 0) * 0.05,
+    }))
+    .filter((candidate) => candidate.title && candidate.tmdbId)
+    .sort((a, b) => b.popularity - a.popularity)
+    .slice(0, 6)
+    .map(({ popularity: _p, ...candidate }) => candidate);
+}
+
 export interface TvEpisodeMarker {
   season: number;
   episode: number;

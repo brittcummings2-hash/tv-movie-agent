@@ -98,6 +98,41 @@ jobs:
                 curl -sS -m 30 "$APP/api/bootstrap?fresh=1" | jq --arg t "$title" \
                   '[.library[] | select(.show_title | ascii_downcase | contains($t | ascii_downcase))]'
                 ;;
+              inspect_rec)
+                title=$(echo "$op" | jq -r '.title')
+                curl -sS -m 30 "$APP/api/bootstrap?fresh=1" | jq --arg t "$title" \
+                  '[.recommendations[] | select(.title | ascii_downcase | contains($t | ascii_downcase)) | {id, title, platform, user_action}]'
+                ;;
+              rec_delete)
+                id=$(echo "$op" | jq -r '.id')
+                resp=$(curl -sS -m 30 -X DELETE -H 'Content-Type: application/json' \
+                  -d "{\"id\":\"$id\"}" "$APP/api/recommendations")
+                echo "rec_delete $id -> $resp"
+                echo "$resp" | grep -q '"ok":true' || fail=1
+                ;;
+              lib_delete)
+                id=$(echo "$op" | jq -r '.id // empty')
+                title=$(echo "$op" | jq -r '.title // empty')
+                if [ -z "$id" ] && [ -n "$title" ]; then
+                  id=$(curl -sS -m 30 "$APP/api/bootstrap?fresh=1" | jq -r --arg t "$title" \
+                    '[.library[] | select(.show_title | ascii_downcase == ($t | ascii_downcase))][0].id // empty')
+                fi
+                if [ -z "$id" ]; then
+                  echo "::error::lib_delete needs an id or matching title: $op"; fail=1
+                else
+                  resp=$(curl -sS -m 30 -X DELETE -H 'Content-Type: application/json' \
+                    -d "{\"id\":\"$id\"}" "$APP/api/watched")
+                  echo "lib_delete $id ($title) -> $resp"
+                  echo "$resp" | grep -q '"ok":true' || fail=1
+                fi
+                ;;
+              post)
+                path=$(echo "$op" | jq -r '.path')
+                payload=$(echo "$op" | jq -c '.body')
+                resp=$(curl -sS -m 290 -X POST -H 'Content-Type: application/json' \
+                  -d "$payload" "$APP$path")
+                echo "POST $path -> $(echo "$resp" | head -c 300)"
+                ;;
               alert_seen)
                 id=$(echo "$op" | jq -r '.id')
                 resp=$(curl -sS -m 30 -X PATCH -H 'Content-Type: application/json' \

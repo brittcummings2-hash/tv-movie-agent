@@ -14,8 +14,10 @@ interface RecommendedViewProps {
   onDismissAlert: (id: string, rowIndex: number) => void;
   onDismissRec: (id: string, rating: number, reasons: string, comments: string) => void;
   onSaveRec: (item: Recommendation, status: "watching") => Promise<void>;
+  onDeleteRec: (item: Recommendation) => Promise<void>;
   onStartSaved: (item: UserRating) => Promise<void>;
   onDismissSaved: (item: UserRating, payload: DismissPayload) => Promise<void>;
+  onDeleteSaved: (item: UserRating) => Promise<void>;
 }
 
 export function RecommendedView({
@@ -27,8 +29,10 @@ export function RecommendedView({
   onDismissAlert,
   onDismissRec,
   onSaveRec,
+  onDeleteRec,
   onStartSaved,
   onDismissSaved,
+  onDeleteSaved,
 }: RecommendedViewProps) {
   const hasContent = alerts.length > 0 || recommendations.length > 0 || savedItems.length > 0;
 
@@ -50,8 +54,10 @@ export function RecommendedView({
         onToast={onToast}
         onSave={onSaveRec}
         onDismiss={onDismissRec}
+        onDeleteRec={onDeleteRec}
         onStartSaved={onStartSaved}
         onDismissSaved={onDismissSaved}
+        onDeleteSaved={onDeleteSaved}
       />
     </>
   );

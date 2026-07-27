@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCached, invalidateCachedPrefix, setCached } from "@/lib/sheet-cache";
-import { getSheetRows, updateSheetField, updateSheetFields } from "@/lib/sheets";
+import { deleteRecommendation, getSheetRows, updateSheetField, updateSheetFields } from "@/lib/sheets";
 import { attachRecommendationImages, mapRecommendations } from "@/lib/mappers";
 import { SHEET_TABS } from "@/lib/types";
 
@@ -70,6 +70,28 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Update failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    const id = String(body.id ?? "").trim();
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    const result = await deleteRecommendation(id);
+    if (result.status === "error") {
+      return NextResponse.json({ error: "Delete failed" }, { status: 404 });
+    }
+
+    invalidateCachedPrefix("recommendations:");
+    invalidateCachedPrefix("bootstrap:");
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Delete failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
