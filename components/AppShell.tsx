@@ -619,6 +619,21 @@ export function AppShell() {
     await moveStage(item, "watching");
   }
 
+  async function deleteRecommendationEntry(item: Recommendation) {
+    try {
+      const res = await fetch("/api/recommendations", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setRecommendations((prev) => prev.filter((rec) => rec.id !== item.id));
+      handleToast(createToast("success", `Deleted ${item.title}`));
+    } catch {
+      handleToast(createToast("error", "Could not delete recommendation"));
+    }
+  }
+
   async function dismissSavedItem(item: UserRating, payload: DismissPayload) {
     try {
       const savedItem = await persistLibraryItem(item, {
@@ -700,8 +715,10 @@ export function AppShell() {
                   )
                 }
                 onSaveRec={saveRecommendation}
+                onDeleteRec={deleteRecommendationEntry}
                 onStartSaved={startSavedItem}
                 onDismissSaved={dismissSavedItem}
+                onDeleteSaved={deleteLibraryEntry}
               />
             </div>
             <div className={activeTab === "watched" ? "portal-panel" : "portal-panel portal-panel-hidden"}>

@@ -17,8 +17,10 @@ interface WatchListSectionProps {
   onToast: (toast: ToastMessage) => void;
   onSave: (item: Recommendation, status: "watching") => Promise<void>;
   onDismiss: (id: string, rating: number, reasons: string, comments: string) => void;
+  onDeleteRec: (item: Recommendation) => Promise<void>;
   onStartSaved: (item: UserRating) => Promise<void>;
   onDismissSaved: (item: UserRating, payload: DismissPayload) => Promise<void>;
+  onDeleteSaved: (item: UserRating) => Promise<void>;
 }
 
 /** Fresh picks and saved-for-later shows in one continuous grid — no section breaks. */
@@ -29,8 +31,10 @@ export function WatchListSection({
   onToast,
   onSave,
   onDismiss,
+  onDeleteRec,
   onStartSaved,
   onDismissSaved,
+  onDeleteSaved,
 }: WatchListSectionProps) {
   if (items.length === 0 && savedItems.length === 0) {
     return null;
@@ -46,6 +50,7 @@ export function WatchListSection({
             badge={index === 0 ? "Top pick" : undefined}
             onSave={onSave}
             onDismiss={onDismiss}
+            onDelete={onDeleteRec}
             onToast={onToast}
           />
         ))}
@@ -58,6 +63,7 @@ export function WatchListSection({
             )}
             onStart={onStartSaved}
             onDismiss={onDismissSaved}
+            onDelete={onDeleteSaved}
           />
         ))}
       </MediaCardGrid>
@@ -70,12 +76,14 @@ function RecCard({
   badge,
   onSave,
   onDismiss,
+  onDelete,
   onToast,
 }: {
   item: Recommendation;
   badge?: string;
   onSave: (item: Recommendation, status: "watching") => Promise<void>;
   onDismiss: (id: string, rating: number, reasons: string, comments: string) => void;
+  onDelete: (item: Recommendation) => Promise<void>;
   onToast: (toast: ToastMessage) => void;
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -124,6 +132,9 @@ function RecCard({
             <button type="button" className="btn btn-ghost btn-xs" onClick={() => setFeedbackOpen(true)}>
               Dismiss
             </button>
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => void onDelete(item)}>
+              Delete
+            </button>
           </>
         }
       />
@@ -143,11 +154,13 @@ function SavedItemCard({
   recommendation,
   onStart,
   onDismiss,
+  onDelete,
 }: {
   item: UserRating;
   recommendation?: Recommendation;
   onStart: (item: UserRating) => Promise<void>;
   onDismiss: (item: UserRating, payload: DismissPayload) => Promise<void>;
+  onDelete: (item: UserRating) => Promise<void>;
 }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -179,6 +192,9 @@ function SavedItemCard({
             </button>
             <button type="button" className="btn btn-ghost btn-xs" onClick={() => setFeedbackOpen(true)}>
               Dismiss
+            </button>
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => void onDelete(item)}>
+              Delete
             </button>
           </>
         }

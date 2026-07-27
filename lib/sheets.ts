@@ -481,6 +481,23 @@ export async function appendEpisodeAlerts(
   return { ids };
 }
 
+export async function deleteRecommendation(id: string): Promise<{ status: "success" | "error" }> {
+  const rowIndex = await findRowIndex(SHEET_TABS.RECOMMENDATIONS, 0, id);
+  if (rowIndex == null) return { status: "error" };
+
+  const sheets = await getSheetsClient();
+  const spreadsheetId = getSheetId();
+
+  await withRetry(() =>
+    sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${SHEET_TABS.RECOMMENDATIONS}'!A${rowIndex}:T${rowIndex}`,
+    })
+  );
+
+  return { status: "success" };
+}
+
 export interface RecommendationSheetEntry {
   title: string;
   release_date: string;
