@@ -70,7 +70,9 @@ export async function getSheetRows(tabName: string): Promise<Record<string, stri
     const obj: Record<string, string | number> = { _sheet_row: i + 1 };
     for (let j = 0; j < headers.length; j++) {
       const key = headerToKey(headers[j]);
-      obj[key] = row[j] ?? "";
+      // First occurrence wins on duplicate headers, matching how writes
+      // resolve columns — otherwise reads and writes target different cells.
+      if (key && !(key in obj)) obj[key] = row[j] ?? "";
     }
     rows.push(obj);
   }
@@ -79,6 +81,16 @@ export async function getSheetRows(tabName: string): Promise<Record<string, stri
 }
 
 async function findRowIndex(tabName: string, idColumn: number, id: string): Promise<number | null> {
+  const rows = await findRowIndexes(tabName, idColumn, id);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+/**
+ * All sheet rows whose ID column matches. Legacy Spark-era rows used
+ * deterministic IDs (e.g. EA<library-id>-<episode>), so duplicates exist —
+ * a single-row update would flip one copy and leave the visible one stale.
+ */
+async function findRowIndexes(tabName: string, idColumn: number, id: string): Promise<number[]> {
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
 
@@ -90,12 +102,13 @@ async function findRowIndex(tabName: string, idColumn: number, id: string): Prom
   );
 
   const data = response.data.values ?? [];
+  const matches: number[] = [];
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][idColumn]) === String(id)) {
-      return i + 1;
+      matches.push(i + 1);
     }
   }
-  return null;
+  return matches;
 }
 
 const TAB_COLUMNS: Record<string, Record<string, number>> = {
@@ -167,19 +180,23 @@ export async function updateSheetField(
   const colIdx = await resolveColumnIndex(tabName, field);
   if (!colIdx) return { status: "error" };
 
-  const rowIndex = await findRowIndex(tabName, 0, id);
-  if (rowIndex == null) return { status: "error" };
+  const rowIndexes = await findRowIndexes(tabName, 0, id);
+  if (rowIndexes.length === 0) return { status: "error" };
 
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
   const colLetter = columnIndexToLetter(colIdx);
 
   await withRetry(() =>
-    sheets.spreadsheets.values.update({
+    sheets.spreadsheets.values.batchUpdate({
       spreadsheetId,
-      range: `'${tabName}'!${colLetter}${rowIndex}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [[value]] },
+      requestBody: {
+        valueInputOption: "RAW",
+        data: rowIndexes.map((rowIndex) => ({
+          range: `'${tabName}'!${colLetter}${rowIndex}`,
+          values: [[value]],
+        })),
+      },
     })
   );
 
