@@ -25,6 +25,7 @@ type AddStatus = "watching" | "want_to_watch";
 export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
   const [title, setTitle] = useState("");
   const [status, setStatus] = useState<AddStatus>("watching");
+  const [withBlake, setWithBlake] = useState(false);
   const [busy, setBusy] = useState(false);
   const [candidates, setCandidates] = useState<TitleCandidate[] | null>(null);
   const [selected, setSelected] = useState<number>(0); // index into candidates; -1 = "as typed"
@@ -59,6 +60,7 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
           platform: "",
           watch_status: status,
           comments: "",
+          watched_with: withBlake ? "blake" : "",
           ...(entry.media_kind ? { media_kind: entry.media_kind } : {}),
         },
       }),
@@ -174,6 +176,16 @@ export function AddShowModal({ onClose, onAdded, onToast }: AddShowModalProps) {
                     Watch List
                   </button>
                 </div>
+              </div>
+              <div className="form-field">
+                <button
+                  type="button"
+                  className={`tag tag-muted add-status-option${withBlake ? " add-status-option--selected" : ""}`}
+                  onClick={() => setWithBlake((prev) => !prev)}
+                  aria-pressed={withBlake}
+                >
+                  {withBlake ? "♥ Watching with Blake" : "+ Watching with Blake"}
+                </button>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
