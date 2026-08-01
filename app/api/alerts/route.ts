@@ -30,14 +30,18 @@ export async function PATCH(request: Request) {
     const id = String(body.id ?? "");
     const rowIndex = Number(body.rowIndex ?? 0);
 
-    if (id) {
-      const { updateSheetField } = await import("@/lib/sheets");
-      const result = await updateSheetField(SHEET_TABS.EPISODE_ALERTS, id, "seen", "TRUE");
+    // Alert rows are append-only, so the rowIndex the client displayed is
+    // stable — write there directly. The ID lookup is the fallback; legacy
+    // Spark-era alerts can share an ID across duplicate rows, so it flips
+    // every match.
+    if (rowIndex > 0) {
+      const result = await updateSheetFieldByRow(SHEET_TABS.EPISODE_ALERTS, rowIndex, "seen", "TRUE");
       if (result.status === "error") {
         return NextResponse.json({ error: "Update failed" }, { status: 404 });
       }
-    } else if (rowIndex > 0) {
-      const result = await updateSheetFieldByRow(SHEET_TABS.EPISODE_ALERTS, rowIndex, "seen", "TRUE");
+    } else if (id) {
+      const { updateSheetField } = await import("@/lib/sheets");
+      const result = await updateSheetField(SHEET_TABS.EPISODE_ALERTS, id, "seen", "TRUE");
       if (result.status === "error") {
         return NextResponse.json({ error: "Update failed" }, { status: 404 });
       }

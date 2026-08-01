@@ -18,6 +18,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Lock the scale: stops iOS from auto-zooming on input focus and leaving
+  // the page stuck zoomed/panned sideways.
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#fefcfa",
 };
