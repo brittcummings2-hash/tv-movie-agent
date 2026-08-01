@@ -152,50 +152,83 @@ export interface RecommendationRunResult {
   ids: string[];
 }
 
+/** Only titles first released in the last N months count as "new". */
+const RECENCY_MONTHS = 3;
+
 /** Generate fresh recommendation rows — replaces the external Spark agent's refresh. */
 export async function runRecommendationRefresh(): Promise<RecommendationRunResult> {
   const { libraryJson, excludedTitles, activeRecTitles, dismissedFeedbackJson } =
     await buildTasteSummary();
   const excludedBlock = excludedTitles.slice(0, 120).join("\n- ");
   const today = new Date().toISOString().slice(0, 10);
-
-  const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
-    system:
-      "You are Brittany's TV/movie recommendation agent. " +
-      "Recommend exactly 3 fresh, currently watchable US streaming titles she has NOT seen. " +
-      "HARD RULE: every title must be fully released and streamable in the US TODAY — use web search " +
-      "to verify the release date and platform; never recommend upcoming, unreleased, or announced-only titles. " +
-      "Prefer recent releases and current buzz; source the buzz claim from your search. " +
-      TASTE_VOICE +
-      ' After any searching, end your reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
-      FIELD_SPEC +
-      " Never recommend excluded titles. Real shows only.",
-    user:
-      `Today's date: ${today}\n\n` +
-      `Her ratings library (most recent / highest rated):\n${libraryJson}\n\n` +
-      `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
-      `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
-      `Excluded titles (never recommend):\n- ${excludedBlock}`,
-    // Must finish inside Vercel's 60s function window.
-    webSearches: 3,
-    effort: "medium",
-  });
-
-  const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
-  const excludedKeys = new Set(excludedTitles.map(normalizeTitle));
   const currentMonth = today.slice(0, 7);
-  const entries = drafts
-    .map(normalizeRecommendationDraft)
-    .filter((entry): entry is RecommendationSheetEntry => entry != null)
-    .filter((entry) => !excludedKeys.has(normalizeTitle(entry.title)))
-    // Hard gate against unreleased titles: must be flagged streamable now,
-    // and a parseable release month must not be in the future.
-    .filter((entry) => entry.available_now)
-    .filter((entry) => {
-      const month = entry.release_date.slice(0, 7);
-      return !/^\d{4}-\d{2}$/.test(month) || month <= currentMonth;
-    })
-    .slice(0, 4);
+  const excludedKeys = new Set(excludedTitles.map(normalizeTitle));
+
+  const cutoffDate = new Date();
+  cutoffDate.setUTCMonth(cutoffDate.getUTCMonth() - RECENCY_MONTHS);
+  const cutoffMonth = cutoffDate.toISOString().slice(0, 7);
+
+  async function requestPicks(minMonth: string | null): Promise<RecommendationSheetEntry[]> {
+    const recencyRule = minMonth
+      ? "HARD RULE 2: only NEW shows — first released within the last " +
+        `${RECENCY_MONTHS} months (release month on or after the cutoff given below). ` +
+        "An older title is never acceptable, no matter how well it fits; pick a different new one instead. "
+      : "The catalog is open: any release age is fine as long as it is a strong taste fit " +
+        "she has NOT seen, but still prefer the newest options available. ";
+
+    const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
+      system:
+        "You are Brittany's TV/movie recommendation agent. " +
+        "Recommend exactly 3 fresh, currently watchable US streaming titles she has NOT seen. " +
+        "HARD RULE 1: every title must be fully released and streamable in the US TODAY — use web search " +
+        "to verify the release date and platform; never recommend upcoming, unreleased, or announced-only titles. " +
+        recencyRule +
+        "Prefer the newest, currently-buzzing releases; source the buzz claim from your search. " +
+        TASTE_VOICE +
+        ' After any searching, end your reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
+        FIELD_SPEC +
+        " Never recommend excluded titles. Real shows only.",
+      user:
+        `Today's date: ${today}\n` +
+        (minMonth ? `Recency cutoff: only titles first released in ${minMonth} or later.\n` : "") +
+        `\nHer ratings library (most recent / highest rated):\n${libraryJson}\n\n` +
+        `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
+        `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
+        `Excluded titles (never recommend):\n- ${excludedBlock}`,
+      // Must finish inside Vercel's function window even with the fallback pass.
+      webSearches: 3,
+      effort: "medium",
+    });
+
+    const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+    return drafts
+      .map(normalizeRecommendationDraft)
+      .filter((entry): entry is RecommendationSheetEntry => entry != null)
+      .filter((entry) => !excludedKeys.has(normalizeTitle(entry.title)))
+      // Hard gates: streamable now, with a parseable release month that is
+      // not in the future and (when a cutoff applies) not too old.
+      .filter((entry) => entry.available_now)
+      .filter((entry) => {
+        const month = entry.release_date.slice(0, 7);
+        if (!/^\d{4}-\d{2}$/.test(month)) return false;
+        if (month > currentMonth) return false;
+        return minMonth ? month >= minMonth : true;
+      })
+      .slice(0, 4);
+  }
+
+  let entries = await requestPicks(cutoffMonth);
+
+  // Safety net: if the new-releases well is genuinely dry, dip into the
+  // catalog once — and label those picks so the cards say so.
+  if (entries.length === 0) {
+    entries = (await requestPicks(null)).map((entry) => ({
+      ...entry,
+      why_options_positive: ["Catalog pick", entry.why_options_positive]
+        .filter(Boolean)
+        .join(" | "),
+    }));
+  }
 
   if (entries.length === 0) {
     throw new Error("No valid new recommendations were generated");
