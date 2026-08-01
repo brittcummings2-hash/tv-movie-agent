@@ -159,19 +159,29 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
   const excludedBlock = excludedTitles.slice(0, 120).join("\n- ");
   const today = new Date().toISOString().slice(0, 10);
 
+  // "New" means new: only titles first released in the last N months qualify.
+  const RECENCY_MONTHS = 3;
+  const cutoffDate = new Date();
+  cutoffDate.setUTCMonth(cutoffDate.getUTCMonth() - RECENCY_MONTHS);
+  const cutoffMonth = cutoffDate.toISOString().slice(0, 7);
+
   const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
     system:
       "You are Brittany's TV/movie recommendation agent. " +
       "Recommend exactly 3 fresh, currently watchable US streaming titles she has NOT seen. " +
-      "HARD RULE: every title must be fully released and streamable in the US TODAY — use web search " +
+      "HARD RULE 1: every title must be fully released and streamable in the US TODAY — use web search " +
       "to verify the release date and platform; never recommend upcoming, unreleased, or announced-only titles. " +
-      "Prefer recent releases and current buzz; source the buzz claim from your search. " +
+      "HARD RULE 2: only NEW shows — first released within the last " +
+      "3 months (release month on or after the cutoff given below). An older title is never acceptable, " +
+      "no matter how well it fits; pick a different new one instead. " +
+      "Prefer the newest, currently-buzzing releases; source the buzz claim from your search. " +
       TASTE_VOICE +
       ' After any searching, end your reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
       FIELD_SPEC +
       " Never recommend excluded titles. Real shows only.",
     user:
-      `Today's date: ${today}\n\n` +
+      `Today's date: ${today}\n` +
+      `Recency cutoff: only titles first released in ${cutoffMonth} or later.\n\n` +
       `Her ratings library (most recent / highest rated):\n${libraryJson}\n\n` +
       `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
       `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
@@ -188,12 +198,13 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
     .map(normalizeRecommendationDraft)
     .filter((entry): entry is RecommendationSheetEntry => entry != null)
     .filter((entry) => !excludedKeys.has(normalizeTitle(entry.title)))
-    // Hard gate against unreleased titles: must be flagged streamable now,
-    // and a parseable release month must not be in the future.
+    // Hard gates: streamable now, and released within the recency window —
+    // a rec must carry a parseable YYYY-MM between the cutoff and today.
     .filter((entry) => entry.available_now)
     .filter((entry) => {
       const month = entry.release_date.slice(0, 7);
-      return !/^\d{4}-\d{2}$/.test(month) || month <= currentMonth;
+      if (!/^\d{4}-\d{2}$/.test(month)) return false;
+      return month >= cutoffMonth && month <= currentMonth;
     })
     .slice(0, 4);
 
