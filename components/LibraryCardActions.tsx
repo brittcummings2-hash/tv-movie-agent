@@ -11,6 +11,7 @@ interface LibraryCardActionsProps {
   onUpdate?: (item: UserRating, draft: LibraryEntryDraft) => Promise<void>;
   onDelete?: (item: UserRating) => Promise<void>;
   onProfileShow?: (item: UserRating) => void;
+  onToggleCompanion?: (item: UserRating) => void;
 }
 
 export function LibraryCardActions({
@@ -19,6 +20,7 @@ export function LibraryCardActions({
   onUpdate,
   onDelete,
   onProfileShow,
+  onToggleCompanion,
 }: LibraryCardActionsProps) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -47,6 +49,17 @@ export function LibraryCardActions({
       <div className="library-card-actions">
         <StageControls item={item} onMoveStage={onMoveStage} compact />
         <div className="library-card-manage">
+          {onToggleCompanion && (
+            <button
+              type="button"
+              className={`btn btn-ghost btn-xs library-card-companion${item.watched_with ? " library-card-companion--on" : ""}`}
+              onClick={() => onToggleCompanion(item)}
+              aria-pressed={Boolean(item.watched_with)}
+              title={item.watched_with ? "Watched with Blake — tap to unmark" : "Mark as watched with Blake"}
+            >
+              {item.watched_with ? "\u2665 With Blake" : "+ With Blake"}
+            </button>
+          )}
           {onProfileShow && (
             <button
               type="button"

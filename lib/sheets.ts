@@ -38,7 +38,7 @@ function headerToKey(header: string): string {
 
 function getSheetRange(tabName: string): string {
   if (tabName === SHEET_TABS.USER_RATINGS) {
-    return `'${tabName}'!A:L`;
+    return `'${tabName}'!A:M`;
   }
   if (tabName === SHEET_TABS.RECOMMENDATIONS) {
     return `'${tabName}'!A:T`;
@@ -109,6 +109,7 @@ const TAB_COLUMNS: Record<string, Record<string, number>> = {
     comments: 8,
     current_season: 11,
     current_episode: 12,
+    watched_with: 13,
   },
   [SHEET_TABS.RECOMMENDATIONS]: {
     user_action: 16,
@@ -268,7 +269,9 @@ export async function appendUserRating(entry: {
   watch_status: string;
   why_reasons?: string;
   comments: string;
+  watched_with?: string;
 }): Promise<{ status: "success"; id: string } | { status: "error" }> {
+  await ensureProgressHeaders();
   const sheets = await getSheetsClient();
   const spreadsheetId = getSheetId();
   const id = `UR${Date.now()}`;
@@ -278,7 +281,7 @@ export async function appendUserRating(entry: {
   await withRetry(() =>
     sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:J${rowIndex}`,
+      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:M${rowIndex}`,
       valueInputOption: "RAW",
       requestBody: {
         values: [
@@ -293,6 +296,9 @@ export async function appendUserRating(entry: {
             entry.comments,
             today,
             today,
+            "",
+            "",
+            entry.watched_with ?? "",
           ],
         ],
       },
@@ -304,7 +310,7 @@ export async function appendUserRating(entry: {
 
 let progressHeadersEnsured = false;
 
-/** The current_season/current_episode columns were added later — create their headers on demand. */
+/** The K–M columns were added after the tab was created — ensure their headers on demand. */
 async function ensureProgressHeaders(): Promise<void> {
   if (progressHeadersEnsured) return;
   const sheets = await getSheetsClient();
@@ -313,17 +319,17 @@ async function ensureProgressHeaders(): Promise<void> {
   const response = await withRetry(() =>
     sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${SHEET_TABS.USER_RATINGS}'!K1:L1`,
+      range: `'${SHEET_TABS.USER_RATINGS}'!K1:M1`,
     })
   );
   const row = response.data.values?.[0] ?? [];
-  if (row[0] !== "current_season" || row[1] !== "current_episode") {
+  if (row[0] !== "current_season" || row[1] !== "current_episode" || row[2] !== "watched_with") {
     await withRetry(() =>
       sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${SHEET_TABS.USER_RATINGS}'!K1:L1`,
+        range: `'${SHEET_TABS.USER_RATINGS}'!K1:M1`,
         valueInputOption: "RAW",
-        requestBody: { values: [["current_season", "current_episode"]] },
+        requestBody: { values: [["current_season", "current_episode", "watched_with"]] },
       })
     );
   }
@@ -342,9 +348,14 @@ export async function updateUserRating(
     comments: string;
     current_season: number;
     current_episode: number;
+    watched_with: string;
   }>
 ): Promise<{ status: "success" | "error" }> {
-  if (fields.current_season != null || fields.current_episode != null) {
+  if (
+    fields.current_season != null ||
+    fields.current_episode != null ||
+    fields.watched_with != null
+  ) {
     await ensureProgressHeaders();
   }
   const rowIndex = await findRowIndex(SHEET_TABS.USER_RATINGS, 0, id);
@@ -390,7 +401,7 @@ export async function deleteUserRating(id: string): Promise<{ status: "success" 
   await withRetry(() =>
     sheets.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:L${rowIndex}`,
+      range: `'${SHEET_TABS.USER_RATINGS}'!A${rowIndex}:M${rowIndex}`,
     })
   );
 

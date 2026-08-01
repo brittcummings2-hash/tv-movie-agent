@@ -179,6 +179,7 @@ export function AppShell() {
   const [finishingItem, setFinishingItem] = useState<UserRating | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [freshPicksBusy, setFreshPicksBusy] = useState(false);
+  const [freshPicksChooserOpen, setFreshPicksChooserOpen] = useState(false);
 
   const handleToast = useCallback((toast: ToastMessage) => {
     setToasts((prev) => [...prev, toast]);
@@ -328,6 +329,7 @@ export function AppShell() {
       why_reasons: string;
       comments: string;
       watch_status: string;
+      watched_with: string;
     }>
   ): Promise<UserRating> {
     const res = await fetch("/api/watched", {
@@ -343,6 +345,7 @@ export function AppShell() {
           why_reasons: item.why_reasons,
           comments: item.comments,
           watch_status: item.watch_status,
+          watched_with: item.watched_with,
           ...overrides,
         },
       }),
@@ -387,6 +390,7 @@ export function AppShell() {
         why_reasons: formatFinishTags(payload.tags),
         comments: payload.comments,
         watch_status: "watched",
+        watched_with: payload.withBlake ? "blake" : "",
       });
       setLibrary((prev) => prev.map((row) => (row.id === item.id ? savedItem : row)));
       setFinishingItem(null);
@@ -420,6 +424,24 @@ export function AppShell() {
         prev.map((row) => (row.id === item.id ? { ...row, ...previous } : row))
       );
       handleToast(createToast("error", "Could not save episode progress"));
+    }
+  }
+
+  async function toggleWatchedWith(item: UserRating) {
+    const next = item.watched_with ? "" : "blake";
+    try {
+      const savedItem = await persistLibraryItem(item, { watched_with: next });
+      setLibrary((prev) => prev.map((row) => (row.id === item.id ? savedItem : row)));
+      handleToast(
+        createToast(
+          "success",
+          next
+            ? `Marked ${item.show_title} as watched with Blake`
+            : `${item.show_title} is back to a solo watch`
+        )
+      );
+    } catch {
+      handleToast(createToast("error", "Could not update show"));
     }
   }
 
@@ -539,12 +561,24 @@ export function AppShell() {
     }
   }
 
-  async function runFreshPicks() {
+  async function runFreshPicks(audience: "me" | "both") {
     if (freshPicksBusy) return;
+    setFreshPicksChooserOpen(false);
     setFreshPicksBusy(true);
-    handleToast(createToast("info", "Finding fresh picks — this takes up to a minute"));
+    handleToast(
+      createToast(
+        "info",
+        audience === "both"
+          ? "Finding picks for you and Blake — this takes up to a minute"
+          : "Finding fresh picks — this takes up to a minute"
+      )
+    );
     try {
-      const res = await fetch("/api/recommend/run", { method: "POST" });
+      const res = await fetch("/api/recommend/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audience }),
+      });
       // Gateway timeouts return HTML, not JSON — don't let parsing mask them.
       const data = (await res.json().catch(() => ({}))) as { added?: number; error?: string };
       if (!res.ok) {
@@ -658,7 +692,7 @@ export function AppShell() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onAddClick={() => setAddOpen(true)}
-        onFreshPicks={() => void runFreshPicks()}
+        onFreshPicks={() => setFreshPicksChooserOpen(true)}
         freshPicksBusy={freshPicksBusy}
       />
       <main className="container">
@@ -686,6 +720,7 @@ export function AppShell() {
                 onUpdate={updateLibraryEntry}
                 onDelete={deleteLibraryEntry}
                 onProfileShow={profileShow}
+                onToggleCompanion={toggleWatchedWith}
                 onUpdateProgress={updateProgress}
               />
             </div>
@@ -732,6 +767,7 @@ export function AppShell() {
                 onRate={rateShow}
                 onUpdate={updateLibraryEntry}
                 onDelete={deleteLibraryEntry}
+                onToggleCompanion={toggleWatchedWith}
                 onRestoreRec={(id) =>
                   setRecommendations((prev) =>
                     prev.map((item) => (item.id === id ? { ...item, user_action: "" } : item))
@@ -766,6 +802,42 @@ export function AppShell() {
           }}
           onToast={handleToast}
         />
+      )}
+      {freshPicksChooserOpen && (
+        <div className="modal-backdrop" onClick={() => setFreshPicksChooserOpen(false)} role="presentation">
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-labelledby="fresh-picks-title"
+          >
+            <h2 id="fresh-picks-title" className="modal-title">
+              Fresh picks for…
+            </h2>
+            <p className="modal-copy">Who's watching?</p>
+            <div className="audience-options">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm audience-option"
+                onClick={() => void runFreshPicks("me")}
+              >
+                Just me
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm audience-option"
+                onClick={() => void runFreshPicks("both")}
+              >
+                Me + Blake
+              </button>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFreshPicksChooserOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {finishingItem && (
         <FinishWatchedModal

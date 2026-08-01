@@ -68,6 +68,7 @@ export async function buildTasteSummary(): Promise<{
       tags: item.why_reasons,
       comments: item.comments,
       platform: item.platform,
+      ...(item.watched_with ? { watched_with: item.watched_with } : {}),
     }));
 
   const excludedTitles = [
@@ -155,8 +156,12 @@ export interface RecommendationRunResult {
 /** Only titles first released in the last N months count as "new". */
 const RECENCY_MONTHS = 3;
 
+export type RecommendationAudience = "me" | "both";
+
 /** Generate fresh recommendation rows — replaces the external Spark agent's refresh. */
-export async function runRecommendationRefresh(): Promise<RecommendationRunResult> {
+export async function runRecommendationRefresh(
+  audience: RecommendationAudience = "me"
+): Promise<RecommendationRunResult> {
   const { libraryJson, excludedTitles, activeRecTitles, dismissedFeedbackJson } =
     await buildTasteSummary();
   const excludedBlock = excludedTitles.slice(0, 120).join("\n- ");
@@ -167,6 +172,14 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
   const cutoffDate = new Date();
   cutoffDate.setUTCMonth(cutoffDate.getUTCMonth() - RECENCY_MONTHS);
   const cutoffMonth = cutoffDate.toISOString().slice(0, 7);
+
+  const audienceRule =
+    audience === "both"
+      ? "These picks are for Brittany and her husband Blake watching TOGETHER. " +
+        "Anchor the shared taste in library shows tagged watched_with: 'blake' — those are their joint watches. " +
+        "Favor tense, twisty shows that work as a couple's watch; skip anything that only fits her solo lane. "
+      : "These picks are for Brittany watching solo. Shows tagged watched_with: 'blake' are joint watches — " +
+        "still valid taste signal, but weight her solo favorites most. ";
 
   async function requestPicks(minMonth: string | null): Promise<RecommendationSheetEntry[]> {
     const recencyRule = minMonth
@@ -183,6 +196,7 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
         "HARD RULE 1: every title must be fully released and streamable in the US TODAY — use web search " +
         "to verify the release date and platform; never recommend upcoming, unreleased, or announced-only titles. " +
         recencyRule +
+        audienceRule +
         "Prefer the newest, currently-buzzing releases; source the buzz claim from your search. " +
         TASTE_VOICE +
         ' After any searching, end your reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
@@ -232,6 +246,15 @@ export async function runRecommendationRefresh(): Promise<RecommendationRunResul
 
   if (entries.length === 0) {
     throw new Error("No valid new recommendations were generated");
+  }
+
+  if (audience === "both") {
+    entries = entries.map((entry) => ({
+      ...entry,
+      why_options_positive: ["For you + Blake", entry.why_options_positive]
+        .filter(Boolean)
+        .join(" | "),
+    }));
   }
 
   const { ids } = await appendRecommendations(entries);

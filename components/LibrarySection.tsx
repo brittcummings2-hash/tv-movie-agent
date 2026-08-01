@@ -29,6 +29,7 @@ interface LibrarySectionProps {
   onUpdate?: (item: UserRating, draft: LibraryEntryDraft) => Promise<void>;
   onDelete?: (item: UserRating) => Promise<void>;
   onProfileShow?: (item: UserRating) => void;
+  onToggleCompanion?: (item: UserRating) => void;
   onUpdateProgress?: (item: UserRating, season: number, episode: number) => void;
 }
 
@@ -51,6 +52,7 @@ export function LibrarySection({
   onUpdate,
   onDelete,
   onProfileShow,
+  onToggleCompanion,
   onUpdateProgress,
 }: LibrarySectionProps) {
   const [expanded, setExpanded] = useState(false);
@@ -131,6 +133,7 @@ export function LibrarySection({
                   onUpdate={onUpdate}
                   onDelete={onDelete}
                   onProfileShow={needsProfile ? onProfileShow : undefined}
+                  onToggleCompanion={onToggleCompanion}
                 />
               }
             />

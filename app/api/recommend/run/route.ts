@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { invalidateCachedPrefix } from "@/lib/sheet-cache";
-import { runRecommendationRefresh } from "@/lib/recommend";
+import { runRecommendationRefresh, type RecommendationAudience } from "@/lib/recommend";
 import {
   isPortalAuthEnabled,
   isValidSessionToken,
@@ -20,13 +20,13 @@ async function isAuthorized(request: NextRequest): Promise<boolean> {
   return isValidSessionToken(session);
 }
 
-async function run(request: NextRequest) {
+async function run(request: NextRequest, audience: RecommendationAudience) {
   if (!(await isAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const result = await runRecommendationRefresh();
+    const result = await runRecommendationRefresh(audience);
     invalidateCachedPrefix("recommendations:");
     invalidateCachedPrefix("bootstrap:");
     return NextResponse.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
@@ -36,12 +36,19 @@ async function run(request: NextRequest) {
   }
 }
 
-/** Vercel cron entry point. */
+/** Vercel cron entry point — solo picks. */
 export async function GET(request: NextRequest) {
-  return run(request);
+  return run(request, "me");
 }
 
-/** In-app "Fresh picks" button. */
+/** In-app "Fresh picks" button — audience comes from the chooser. */
 export async function POST(request: NextRequest) {
-  return run(request);
+  let audience: RecommendationAudience = "me";
+  try {
+    const body = await request.json();
+    if (body?.audience === "both") audience = "both";
+  } catch {
+    // No body — solo by default.
+  }
+  return run(request, audience);
 }
