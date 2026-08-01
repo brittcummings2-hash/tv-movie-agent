@@ -1548,3 +1548,20 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Fresh picks audience chooser + companion toggle */
+.audience-options {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.audience-option {
+  flex: 1;
+  padding: 12px 8px;
+}
+
+.library-card-companion--on {
+  color: var(--dusty-rose-text);
+  background: var(--dusty-rose-bg);
+}

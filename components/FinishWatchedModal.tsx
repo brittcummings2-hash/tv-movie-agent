@@ -14,6 +14,7 @@ export interface FinishWatchedPayload {
   rating: number;
   tags: string[];
   comments: string;
+  withBlake: boolean;
 }
 
 interface FinishWatchedModalProps {
@@ -32,6 +33,7 @@ export function FinishWatchedModal({
   const [rating, setRating] = useState(item.rating || 0);
   const [selectedTags, setSelectedTags] = useState<string[]>(() => parseFinishTags(item.why_reasons));
   const [comments, setComments] = useState(item.comments);
+  const [withBlake, setWithBlake] = useState(Boolean(item.watched_with));
   const [saving, setSaving] = useState(false);
 
   const suggestions = useMemo(
@@ -69,7 +71,7 @@ export function FinishWatchedModal({
     if (rating < 1) return;
     setSaving(true);
     try {
-      await onComplete({ rating, tags: selectedTags, comments: comments.trim() });
+      await onComplete({ rating, tags: selectedTags, comments: comments.trim(), withBlake });
       onClose();
     } catch {
       // Error toast handled by parent
@@ -91,6 +93,16 @@ export function FinishWatchedModal({
         </h2>
         <p className="modal-copy">Rate it first, then tap what stood out.</p>
         <form onSubmit={handleSubmit}>
+          <div className="form-field">
+            <button
+              type="button"
+              className={`tag tag-muted add-status-option finish-companion${withBlake ? " add-status-option--selected" : ""}`}
+              onClick={() => setWithBlake((prev) => !prev)}
+              aria-pressed={withBlake}
+            >
+              {withBlake ? "\u2665 Watched with Blake" : "+ Watched with Blake"}
+            </button>
+          </div>
           <div className="form-field finish-rating-field finish-rating-field--first">
             <label>Your rating</label>
             <StarRating value={rating} interactive onChange={setRating} />

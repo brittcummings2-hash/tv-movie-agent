@@ -22,6 +22,7 @@ interface StatusTabViewProps {
   onUpdate: (item: UserRating, draft: LibraryEntryDraft) => Promise<void>;
   onDelete: (item: UserRating) => Promise<void>;
   onProfileShow?: (item: UserRating) => void;
+  onToggleCompanion?: (item: UserRating) => void;
   onUpdateProgress?: (item: UserRating, season: number, episode: number) => void;
   onRestoreRec?: (id: string) => void;
   onToast?: (toast: ToastMessage) => void;
@@ -42,6 +43,7 @@ export function StatusTabView({
   onUpdate,
   onDelete,
   onProfileShow,
+  onToggleCompanion,
   onUpdateProgress,
   dismissedRecommendations = [],
   onRestoreRec,
@@ -134,6 +136,7 @@ export function StatusTabView({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onProfileShow={onProfileShow}
+            onToggleCompanion={onToggleCompanion}
             onUpdateProgress={onUpdateProgress}
           />
         )}
@@ -150,6 +153,7 @@ export function StatusTabView({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onProfileShow={onProfileShow}
+            onToggleCompanion={onToggleCompanion}
             onUpdateProgress={onUpdateProgress}
           />
         )}
@@ -165,6 +169,7 @@ export function StatusTabView({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onProfileShow={onProfileShow}
+            onToggleCompanion={onToggleCompanion}
           />
         )}
       </>

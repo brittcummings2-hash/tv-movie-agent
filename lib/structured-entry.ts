@@ -10,6 +10,7 @@ export interface StructuredWatchEntry {
   comments: string;
   media_kind?: "tv" | "movie";
   type_hint?: string;
+  watched_with?: string;
 }
 
 export async function enrichStructuredEntry(

@@ -26,6 +26,7 @@ function parseStructuredEntry(body: Record<string, unknown>): StructuredWatchEnt
     comments: String(entry.comments ?? ""),
     media_kind:
       entry.media_kind === "movie" ? "movie" : entry.media_kind === "tv" ? "tv" : undefined,
+    ...(entry.watched_with != null ? { watched_with: String(entry.watched_with) } : {}),
   };
 }
 
@@ -140,6 +141,7 @@ export async function PATCH(request: Request) {
       "platform",
       "current_season",
       "current_episode",
+      "watched_with",
     ];
     const numericFields = new Set(["rating", "current_season", "current_episode"]);
 
