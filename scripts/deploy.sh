@@ -9,4 +9,4 @@ npm run build
 echo "Deploying to Vercel (production)..."
 npx vercel deploy --prod --yes --scope brittany-cummings-projects
 
-echo "Done. Production: https://tv-movie-agent.vercel.app"
+echo "Done. Production: https://britts-queue.vercel.app"
