@@ -14,7 +14,7 @@ on:
       app_url:
         description: "Base URL of the deployed app (no trailing slash)"
         required: true
-        default: "https://tv-movie-agent.vercel.app"
+        default: "https://britts-queue.vercel.app"
       ops:
         description: "JSON array of operations"
         required: true

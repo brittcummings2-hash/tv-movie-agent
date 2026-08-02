@@ -56,4 +56,4 @@ run("npx", ["vercel", "--prod", "--yes"]);
 console.log("\nVerifying local Google connection...");
 run("npm", ["run", "google:verify"]);
 
-console.log("\nDone. Hard-refresh https://tv-movie-agent.vercel.app");
+console.log("\nDone. Hard-refresh https://britts-queue.vercel.app");
