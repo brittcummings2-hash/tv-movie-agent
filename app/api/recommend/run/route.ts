@@ -8,7 +8,10 @@ import {
 } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+// The engine run (Claude + web searches, sometimes a second catalog pass)
+// can exceed 300s — the 2026-08-17 cron timed out exactly there. 800 is the
+// Pro-plan Fluid compute ceiling.
+export const maxDuration = 800;
 
 async function isAuthorized(request: NextRequest): Promise<boolean> {
   const cronSecret = process.env.CRON_SECRET?.trim();

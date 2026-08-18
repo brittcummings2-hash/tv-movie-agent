@@ -112,9 +112,13 @@ export function normalizeRecommendationDraft(
   if (!title) return null;
 
   const releaseDate = String(entry.release_date ?? "").trim();
-  const normalizedRelease = /^\d{4}-\d{2}/.test(releaseDate)
-    ? releaseDate.slice(0, 7)
-    : releaseDate;
+  // Keep the exact day when given (upcoming picks carry their premiere
+  // date); otherwise normalize to the usual YYYY-MM.
+  const normalizedRelease = /^\d{4}-\d{2}-\d{2}/.test(releaseDate)
+    ? releaseDate.slice(0, 10)
+    : /^\d{4}-\d{2}/.test(releaseDate)
+      ? releaseDate.slice(0, 7)
+      : releaseDate;
 
   return {
     title,
@@ -156,6 +160,9 @@ export interface RecommendationRunResult {
 /** Only titles first released in the last N months count as "new". */
 const RECENCY_MONTHS = 3;
 
+/** How far out an upcoming pick's premiere date may be. */
+const UPCOMING_HORIZON_MONTHS = 2;
+
 export type RecommendationAudience = "me" | "both";
 
 /** Generate fresh recommendation rows — replaces the external Spark agent's refresh. */
@@ -172,6 +179,24 @@ export async function runRecommendationRefresh(
   const cutoffDate = new Date();
   cutoffDate.setUTCMonth(cutoffDate.getUTCMonth() - RECENCY_MONTHS);
   const cutoffMonth = cutoffDate.toISOString().slice(0, 7);
+
+  // Upcoming picks are welcome when clearly dated and premiering soon.
+  const horizonDate = new Date();
+  horizonDate.setUTCMonth(horizonDate.getUTCMonth() + UPCOMING_HORIZON_MONTHS);
+  const horizonMonth = horizonDate.toISOString().slice(0, 7);
+
+  function upcomingLabel(releaseDate: string): string {
+    const hasDay = /^\d{4}-\d{2}-\d{2}/.test(releaseDate);
+    const date = new Date(`${hasDay ? releaseDate.slice(0, 10) : `${releaseDate.slice(0, 7)}-01`}T00:00:00Z`);
+    const sameYear = releaseDate.slice(0, 4) === today.slice(0, 4);
+    const label = date.toLocaleDateString("en-US", {
+      month: hasDay ? "short" : "long",
+      ...(hasDay ? { day: "numeric" } : {}),
+      ...(sameYear ? {} : { year: "numeric" }),
+      timeZone: "UTC",
+    });
+    return `Coming ${label}`;
+  }
 
   const audienceRule =
     audience === "both"
@@ -192,9 +217,13 @@ export async function runRecommendationRefresh(
     const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
       system:
         "You are Brittany's TV/movie recommendation agent. " +
-        "Recommend exactly 3 fresh, currently watchable US streaming titles she has NOT seen. " +
-        "HARD RULE 1: every title must be fully released and streamable in the US TODAY — use web search " +
-        "to verify the release date and platform; never recommend upcoming, unreleased, or announced-only titles. " +
+        "Recommend exactly 3 fresh, currently watchable US streaming titles she has NOT seen — " +
+        "plus, when a genuinely exciting fit exists, 1 UPCOMING title as a bonus fourth pick. " +
+        "HARD RULE 1: the 3 main titles must be fully released and streamable in the US TODAY — use web search " +
+        "to verify the release date and platform; never pass off upcoming or announced-only titles as watchable. " +
+        "The optional upcoming pick is the one exception: it must have a confirmed US premiere date within the " +
+        `next ${UPCOMING_HORIZON_MONTHS} months — set available_now to false and release_date to the exact ` +
+        "premiere date as YYYY-MM-DD (skip the upcoming pick if you cannot confirm an exact date). " +
         recencyRule +
         audienceRule +
         "Prefer the newest, currently-buzzing releases; source the buzz claim from your search. " +
@@ -219,29 +248,48 @@ export async function runRecommendationRefresh(
       .map(normalizeRecommendationDraft)
       .filter((entry): entry is RecommendationSheetEntry => entry != null)
       .filter((entry) => !excludedKeys.has(normalizeTitle(entry.title)))
-      // Hard gates: streamable now, with a parseable release month that is
-      // not in the future and (when a cutoff applies) not too old.
-      .filter((entry) => entry.available_now)
+      // Hard gates: released picks must be streamable now with a release
+      // month that is not in the future and (when a cutoff applies) not too
+      // old. Upcoming picks are allowed only with a premiere inside the
+      // horizon — and get a "Coming <date>" label so the card says so.
       .filter((entry) => {
         const month = entry.release_date.slice(0, 7);
         if (!/^\d{4}-\d{2}$/.test(month)) return false;
-        if (month > currentMonth) return false;
-        return minMonth ? month >= minMonth : true;
+        if (entry.available_now) {
+          if (month > currentMonth) return false;
+          return minMonth ? month >= minMonth : true;
+        }
+        return month > currentMonth && month <= horizonMonth;
       })
+      .map((entry) =>
+        entry.available_now
+          ? entry
+          : {
+              ...entry,
+              why_options_positive: [upcomingLabel(entry.release_date), entry.why_options_positive]
+                .filter(Boolean)
+                .join(" | "),
+            }
+      )
+      // Watchable-now picks first, then the dated upcoming bonus.
+      .sort((a, b) => Number(b.available_now) - Number(a.available_now))
       .slice(0, 4);
   }
 
   let entries = await requestPicks(cutoffMonth);
 
-  // Safety net: if the new-releases well is genuinely dry, dip into the
-  // catalog once — and label those picks so the cards say so.
-  if (entries.length === 0) {
-    entries = (await requestPicks(null)).map((entry) => ({
-      ...entry,
-      why_options_positive: ["Catalog pick", entry.why_options_positive]
-        .filter(Boolean)
-        .join(" | "),
-    }));
+  // Safety net: if nothing watchable-now survived (an upcoming bonus alone
+  // doesn't count), dip into the catalog once — labeled so the cards say so.
+  if (!entries.some((entry) => entry.available_now)) {
+    const catalog = (await requestPicks(null))
+      .filter((entry) => entry.available_now)
+      .map((entry) => ({
+        ...entry,
+        why_options_positive: ["Catalog pick", entry.why_options_positive]
+          .filter(Boolean)
+          .join(" | "),
+      }));
+    entries = [...catalog, ...entries];
   }
 
   if (entries.length === 0) {
