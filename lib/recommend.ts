@@ -248,8 +248,12 @@ export async function runRecommendationRefresh(
         `Excluded titles (never recommend):\n- ${excludedBlock}`,
       // Must finish inside Vercel's function window even with the fallback
       // pass — 5 minutes per call, no SDK retry (the fallback is the retry).
-      webSearches: 3,
-      effort: "medium",
+      // Kept deliberately light: at effort "medium" with 3 searches this
+      // call deliberated past every timeout (a 12s profile call proved the
+      // API itself was fine), so picks ran dry for weeks.
+      webSearches: 2,
+      effort: "low",
+      maxTokens: 4096,
       timeoutMs: 300_000,
       maxRetries: 0,
     });
