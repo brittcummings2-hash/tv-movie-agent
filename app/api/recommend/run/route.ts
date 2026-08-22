@@ -35,6 +35,7 @@ async function run(request: NextRequest, audience: RecommendationAudience) {
     return NextResponse.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Recommendation refresh failed";
+    console.error("recommend-run failed:", message);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

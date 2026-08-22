@@ -22,7 +22,7 @@ on:
 jobs:
   curate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Apply operations
         env:
@@ -129,7 +129,7 @@ jobs:
               post)
                 path=$(echo "$op" | jq -r '.path')
                 payload=$(echo "$op" | jq -c '.body')
-                resp=$(curl -sS -m 290 -X POST -H 'Content-Type: application/json' \
+                resp=$(curl -sS -m 780 -X POST -H 'Content-Type: application/json' \
                   -d "$payload" "$APP$path")
                 echo "POST $path -> $(echo "$resp" | head -c 300)"
                 ;;
