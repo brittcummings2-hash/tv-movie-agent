@@ -49,23 +49,49 @@ export async function askClaudeJson<T>(request: ClaudeJsonRequest): Promise<T> {
     });
   }
 
-  // Without an explicit timeout the SDK waits ~10 minutes and then retries,
-  // which is exactly how the twice-weekly cron silently 504ed for weeks.
-  const response = await getClient().messages.create(
-    {
-      model: getModel(),
-      max_tokens: request.maxTokens ?? 8192,
-      thinking: { type: "adaptive" },
-      ...(request.effort ? { output_config: { effort: request.effort } } : {}),
-      system: request.system,
-      tools,
-      messages: [{ role: "user", content: request.user }],
-    },
-    {
-      timeout: request.timeoutMs ?? 120_000,
-      maxRetries: request.maxRetries ?? 1,
+  // Two hard-won lessons encoded here (both took the twice-weekly cron down
+  // for weeks):
+  // - Stream instead of a single blocking request: long web-search turns sit
+  //   idle for minutes on a non-streaming connection and something in the
+  //   path eventually gives up, so the call "hangs" until the SDK timeout.
+  // - Web-search turns can end with stop_reason "pause_turn" — partial
+  //   content the caller must send back to continue. Treating it as final
+  //   yielded "no JSON object" failures.
+  const deadline = Date.now() + (request.timeoutMs ?? 120_000);
+  const messages: Anthropic.Messages.MessageParam[] = [
+    { role: "user", content: request.user },
+  ];
+
+  let response: Anthropic.Message;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 5_000) {
+      throw new Error("Claude call exceeded its time budget");
     }
-  );
+
+    const stream = getClient().messages.stream(
+      {
+        model: getModel(),
+        max_tokens: request.maxTokens ?? 8192,
+        thinking: { type: "adaptive" },
+        ...(request.effort ? { output_config: { effort: request.effort } } : {}),
+        system: request.system,
+        tools,
+        messages,
+      },
+      {
+        timeout: remaining,
+        maxRetries: request.maxRetries ?? 1,
+      }
+    );
+    response = await stream.finalMessage();
+
+    if (response.stop_reason !== "pause_turn") break;
+    messages.push({
+      role: "assistant",
+      content: response.content as Anthropic.Messages.ContentBlockParam[],
+    });
+  }
 
   const text = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
