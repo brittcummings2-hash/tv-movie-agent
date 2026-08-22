@@ -33,20 +33,24 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    const allowed = ["user_action", "user_rating", "user_reasons", "user_comments"];
+    // platform/release_date cover factual corrections (e.g. a pick listed
+    // under the wrong streamer).
+    const allowed = ["user_action", "user_rating", "user_reasons", "user_comments", "platform", "release_date"];
 
     // Multi-field form: { id, fields: { user_action, user_reasons, ... } }
     if (body.fields && typeof body.fields === "object") {
-      const fields: Record<string, string> = {};
-      for (const [field, value] of Object.entries(body.fields as Record<string, unknown>)) {
+      for (const field of Object.keys(body.fields as Record<string, unknown>)) {
         if (!allowed.includes(field)) {
           return NextResponse.json({ error: "Field not allowed" }, { status: 400 });
         }
-        fields[field] = String(value ?? "");
       }
-      const result = await updateSheetFields(SHEET_TABS.RECOMMENDATIONS, id, fields);
-      if (result.status === "error") {
-        return NextResponse.json({ error: "Update failed" }, { status: 404 });
+      // updateSheetField resolves columns from the header row, so it covers
+      // fields the fixed column map doesn't know about.
+      for (const [field, value] of Object.entries(body.fields as Record<string, unknown>)) {
+        const result = await updateSheetField(SHEET_TABS.RECOMMENDATIONS, id, field, String(value ?? ""));
+        if (result.status === "error") {
+          return NextResponse.json({ error: "Update failed" }, { status: 404 });
+        }
       }
       invalidateCachedPrefix("recommendations:");
       invalidateCachedPrefix("bootstrap:");
