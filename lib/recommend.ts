@@ -169,8 +169,15 @@ export type RecommendationAudience = "me" | "both";
 export async function runRecommendationRefresh(
   audience: RecommendationAudience = "me"
 ): Promise<RecommendationRunResult> {
+  // Stage logging so a hung run shows WHERE it hung in the runtime logs.
+  const startedAt = Date.now();
+  const mark = (stage: string) =>
+    console.log(`recommend-run [${Math.round((Date.now() - startedAt) / 1000)}s] ${stage}`);
+
+  mark("start: building taste summary");
   const { libraryJson, excludedTitles, activeRecTitles, dismissedFeedbackJson } =
     await buildTasteSummary();
+  mark("taste summary built");
   const excludedBlock = excludedTitles.slice(0, 120).join("\n- ");
   const today = new Date().toISOString().slice(0, 10);
   const currentMonth = today.slice(0, 7);
@@ -207,6 +214,7 @@ export async function runRecommendationRefresh(
         "still valid taste signal, but weight her solo favorites most. ";
 
   async function requestPicks(minMonth: string | null): Promise<RecommendationSheetEntry[]> {
+    mark(`claude call start (minMonth=${minMonth ?? "open"})`);
     const recencyRule = minMonth
       ? "HARD RULE 2: only NEW shows — first released within the last " +
         `${RECENCY_MONTHS} months (release month on or after the cutoff given below). ` +
@@ -245,6 +253,7 @@ export async function runRecommendationRefresh(
       timeoutMs: 300_000,
       maxRetries: 0,
     });
+    mark(`claude call done (minMonth=${minMonth ?? "open"})`);
 
     const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
     return drafts
@@ -287,6 +296,7 @@ export async function runRecommendationRefresh(
     entries = await requestPicks(cutoffMonth);
   } catch (error) {
     firstPassError = error;
+    mark(`first pass failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   // Safety net: if nothing watchable-now survived (an upcoming bonus alone
@@ -319,7 +329,9 @@ export async function runRecommendationRefresh(
     }));
   }
 
+  mark(`appending ${entries.length} picks`);
   const { ids } = await appendRecommendations(entries);
+  mark(`done: appended ${ids.length}`);
   return { added: ids.length, ids };
 }
 
