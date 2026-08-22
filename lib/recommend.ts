@@ -238,9 +238,12 @@ export async function runRecommendationRefresh(
         `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
         `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
         `Excluded titles (never recommend):\n- ${excludedBlock}`,
-      // Must finish inside Vercel's function window even with the fallback pass.
+      // Must finish inside Vercel's function window even with the fallback
+      // pass — 5 minutes per call, no SDK retry (the fallback is the retry).
       webSearches: 3,
       effort: "medium",
+      timeoutMs: 300_000,
+      maxRetries: 0,
     });
 
     const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
@@ -276,7 +279,15 @@ export async function runRecommendationRefresh(
       .slice(0, 4);
   }
 
-  let entries = await requestPicks(cutoffMonth);
+  // A stalled/failed first pass must not kill the run — the catalog pass
+  // below doubles as its retry.
+  let entries: RecommendationSheetEntry[] = [];
+  let firstPassError: unknown = null;
+  try {
+    entries = await requestPicks(cutoffMonth);
+  } catch (error) {
+    firstPassError = error;
+  }
 
   // Safety net: if nothing watchable-now survived (an upcoming bonus alone
   // doesn't count), dip into the catalog once — labeled so the cards say so.
@@ -290,6 +301,9 @@ export async function runRecommendationRefresh(
           .join(" | "),
       }));
     entries = [...catalog, ...entries];
+    if (entries.length > 0 && firstPassError) {
+      console.error("recommendation first pass failed, catalog pass covered:", firstPassError);
+    }
   }
 
   if (entries.length === 0) {

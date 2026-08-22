@@ -28,6 +28,10 @@ export interface ClaudeJsonRequest {
   maxTokens?: number;
   /** "low" keeps latency-sensitive calls fast; omit for the default depth. */
   effort?: "low" | "medium" | "high";
+  /** Hard per-call budget. A stalled call must fail fast, not eat the run. */
+  timeoutMs?: number;
+  /** SDK retries; default 1. Pass 0 when the caller owns its own fallback. */
+  maxRetries?: number;
 }
 
 /**
@@ -45,15 +49,23 @@ export async function askClaudeJson<T>(request: ClaudeJsonRequest): Promise<T> {
     });
   }
 
-  const response = await getClient().messages.create({
-    model: getModel(),
-    max_tokens: request.maxTokens ?? 8192,
-    thinking: { type: "adaptive" },
-    ...(request.effort ? { output_config: { effort: request.effort } } : {}),
-    system: request.system,
-    tools,
-    messages: [{ role: "user", content: request.user }],
-  });
+  // Without an explicit timeout the SDK waits ~10 minutes and then retries,
+  // which is exactly how the twice-weekly cron silently 504ed for weeks.
+  const response = await getClient().messages.create(
+    {
+      model: getModel(),
+      max_tokens: request.maxTokens ?? 8192,
+      thinking: { type: "adaptive" },
+      ...(request.effort ? { output_config: { effort: request.effort } } : {}),
+      system: request.system,
+      tools,
+      messages: [{ role: "user", content: request.user }],
+    },
+    {
+      timeout: request.timeoutMs ?? 120_000,
+      maxRetries: request.maxRetries ?? 1,
+    }
+  );
 
   const text = response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
