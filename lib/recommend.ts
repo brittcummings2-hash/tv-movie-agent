@@ -254,13 +254,14 @@ export async function runRecommendationRefresh(
       webSearches: 2,
       effort: "low",
       maxTokens: 4096,
-      timeoutMs: 300_000,
+      // 240s each: two passes plus sheet writes must fit the 800s window.
+      timeoutMs: 240_000,
       maxRetries: 0,
     });
     mark(`claude call done (minMonth=${minMonth ?? "open"})`);
 
     const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
-    return drafts
+    const kept = drafts
       .map(normalizeRecommendationDraft)
       .filter((entry): entry is RecommendationSheetEntry => entry != null)
       .filter((entry) => !excludedKeys.has(normalizeTitle(entry.title)))
@@ -290,6 +291,16 @@ export async function runRecommendationRefresh(
       // Watchable-now picks first, then the dated upcoming bonus.
       .sort((a, b) => Number(b.available_now) - Number(a.available_now))
       .slice(0, 4);
+
+    if (kept.length === 0 && drafts.length > 0) {
+      // Show WHAT the gates rejected, so a bad run is diagnosable from logs.
+      mark(
+        `all drafts filtered out: ${drafts
+          .map((d) => `${d?.title} (${d?.release_date}, now=${d?.available_now})`)
+          .join("; ")}`
+      );
+    }
+    return kept;
   }
 
   // A stalled/failed first pass must not kill the run — the catalog pass
