@@ -69,22 +69,31 @@ export async function askClaudeJson<T>(request: ClaudeJsonRequest): Promise<T> {
       throw new Error("Claude call exceeded its time budget");
     }
 
-    const stream = getClient().messages.stream(
-      {
-        model: getModel(),
-        max_tokens: request.maxTokens ?? 8192,
-        thinking: { type: "adaptive" },
-        ...(request.effort ? { output_config: { effort: request.effort } } : {}),
-        system: request.system,
-        tools,
-        messages,
-      },
-      {
-        timeout: remaining,
-        maxRetries: request.maxRetries ?? 1,
-      }
-    );
-    response = await stream.finalMessage();
+    // The SDK's timeout only guards the connection — a stream that keeps
+    // trickling can run forever. The abort signal makes the budget real.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), remaining);
+    try {
+      const stream = getClient().messages.stream(
+        {
+          model: getModel(),
+          max_tokens: request.maxTokens ?? 8192,
+          thinking: { type: "adaptive" },
+          ...(request.effort ? { output_config: { effort: request.effort } } : {}),
+          system: request.system,
+          tools,
+          messages,
+        },
+        {
+          timeout: remaining,
+          maxRetries: request.maxRetries ?? 1,
+          signal: controller.signal,
+        }
+      );
+      response = await stream.finalMessage();
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (response.stop_reason !== "pause_turn") break;
     messages.push({
