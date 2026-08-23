@@ -258,9 +258,11 @@ export async function runRecommendationRefresh(
       timeoutMs: 240_000,
       maxRetries: 0,
     });
-    mark(`claude call done (minMonth=${minMonth ?? "open"})`);
-
     const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+    mark(`claude call done (minMonth=${minMonth ?? "open"}, drafts=${drafts.length})`);
+    if (drafts.length === 0) {
+      mark(`empty drafts, payload keys: ${JSON.stringify(parsed).slice(0, 300)}`);
+    }
     const kept = drafts
       .map(normalizeRecommendationDraft)
       .filter((entry): entry is RecommendationSheetEntry => entry != null)
@@ -316,16 +318,23 @@ export async function runRecommendationRefresh(
 
   // Safety net: if nothing watchable-now survived (an upcoming bonus alone
   // doesn't count), dip into the catalog once — labeled so the cards say so.
+  // A failed catalog pass must not throw away what the first pass DID yield.
   if (!entries.some((entry) => entry.available_now)) {
-    const catalog = (await requestPicks(null))
-      .filter((entry) => entry.available_now)
-      .map((entry) => ({
-        ...entry,
-        why_options_positive: ["Catalog pick", entry.why_options_positive]
-          .filter(Boolean)
-          .join(" | "),
-      }));
-    entries = [...catalog, ...entries];
+    try {
+      const catalog = (await requestPicks(null))
+        .filter((entry) => entry.available_now)
+        .map((entry) => ({
+          ...entry,
+          why_options_positive: ["Catalog pick", entry.why_options_positive]
+            .filter(Boolean)
+            .join(" | "),
+        }));
+      entries = [...catalog, ...entries];
+    } catch (error) {
+      mark(`catalog pass failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (entries.length === 0 && firstPassError) throw firstPassError;
+      if (entries.length === 0) throw error;
+    }
     if (entries.length > 0 && firstPassError) {
       console.error("recommendation first pass failed, catalog pass covered:", firstPassError);
     }
