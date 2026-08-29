@@ -41,8 +41,12 @@ Everything runs inside the app now (the old Gemini Spark workflow is retired):
 - **Fresh picks** — `/api/recommend/run` builds a taste profile from
   `user_ratings` (5-star faves weighted heavily, DNFs as hard-avoids), asks
   Claude with web search for 3 fresh, currently-streamable titles, and appends
-  them to the `recommendations` tab. Runs on a Mon/Thu cron and on demand via
-  the header **Fresh picks** button.
+  them to the `recommendations` tab. Runs on a daily cron and on demand via
+  the header **Fresh picks** button. New stuff only: picks must be first
+  released within the last 3 months (or be a dated upcoming premiere), and any
+  title that has ever appeared as a rec — acted on or not — is permanently excluded from
+  future runs, so nothing repeats. If no new release clears the bar that day,
+  the run adds nothing rather than falling back to older catalog titles.
 - **Profiling on add** — adding a show profiles it synchronously (fit score,
   hook, comps) and writes an accepted `recommendations` row. No queue, no
   polling.
