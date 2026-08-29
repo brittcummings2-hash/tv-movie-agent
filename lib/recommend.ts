@@ -1,4 +1,5 @@
 import { filterActiveRecommendations, findRecommendationForTitle, normalizeTitle } from "./search";
+import { discoverRecentCandidates, type DiscoverCandidate } from "./tmdb";
 import { askClaudeJson, isClaudeConfigured } from "./claude";
 import { mapRecommendations, mapUserRatings } from "./mappers";
 import {
@@ -177,9 +178,6 @@ export async function runRecommendationRefresh(
   const { libraryJson, excludedTitles, activeRecTitles, dismissedFeedbackJson } =
     await buildTasteSummary();
   mark("taste summary built");
-  // The list now carries every past rec and grows daily; show the model as
-  // much as reasonable (the normalized-title hard filter catches the rest).
-  const excludedBlock = excludedTitles.slice(0, 300).join("\n- ");
   const today = new Date().toISOString().slice(0, 10);
   const currentMonth = today.slice(0, 7);
   const excludedKeys = new Set(excludedTitles.map(normalizeTitle));
@@ -187,11 +185,64 @@ export async function runRecommendationRefresh(
   const cutoffDate = new Date();
   cutoffDate.setUTCMonth(cutoffDate.getUTCMonth() - RECENCY_MONTHS);
   const cutoffMonth = cutoffDate.toISOString().slice(0, 7);
+  const cutoffDay = cutoffDate.toISOString().slice(0, 10);
 
   // Upcoming picks are welcome when clearly dated and premiering soon.
   const horizonDate = new Date();
   horizonDate.setUTCMonth(horizonDate.getUTCMonth() + UPCOMING_HORIZON_MONTHS);
   const horizonMonth = horizonDate.toISOString().slice(0, 7);
+  const horizonDay = horizonDate.toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+
+  // Candidate pools come from TMDB, not web search: release dates, platforms,
+  // and streamability arrive pre-verified, so the Claude call only has to do
+  // the taste matching. (Web search proved too unreliable to be load-bearing —
+  // when it errored, every pass came back empty.)
+  mark("fetching TMDB candidate pools");
+  const [releasedPool, upcomingPool] = await Promise.all([
+    discoverRecentCandidates({
+      fromDate: cutoffDay,
+      toDate: today,
+      limit: 30,
+      excludeTitleKeys: excludedKeys,
+    }),
+    discoverRecentCandidates({
+      fromDate: tomorrow,
+      toDate: horizonDay,
+      limit: 10,
+      excludeTitleKeys: excludedKeys,
+      requireStreamable: false,
+    }),
+  ]);
+  const releasedCandidates = releasedPool.filter(
+    (candidate) => candidate.platform && candidate.releaseDate
+  );
+  const upcomingCandidates = upcomingPool.filter((candidate) => candidate.releaseDate);
+  mark(
+    `candidates: ${releasedCandidates.length} released, ${upcomingCandidates.length} upcoming`
+  );
+  if (releasedCandidates.length === 0) {
+    throw new Error("TMDB returned no new streamable candidates");
+  }
+  const releasedByKey = new Map(
+    releasedCandidates.map((candidate) => [normalizeTitle(candidate.title), candidate])
+  );
+  const upcomingByKey = new Map(
+    upcomingCandidates.map((candidate) => [normalizeTitle(candidate.title), candidate])
+  );
+
+  function formatCandidate(candidate: DiscoverCandidate): string {
+    const bits = [
+      candidate.kind === "tv" ? "series" : "movie",
+      `released ${candidate.releaseDate}`,
+      candidate.platform ? `on ${candidate.platform}` : "",
+      candidate.genres.length ? candidate.genres.join("/") : "",
+      candidate.tmdbRating ? `TMDB ${candidate.tmdbRating.toFixed(1)}` : "",
+    ].filter(Boolean);
+    return `- ${candidate.title} (${bits.join(", ")})${
+      candidate.overview ? ` — ${candidate.overview}` : ""
+    }`;
+  }
 
   function upcomingLabel(releaseDate: string): string {
     const hasDay = /^\d{4}-\d{2}-\d{2}/.test(releaseDate);
@@ -216,49 +267,38 @@ export async function runRecommendationRefresh(
 
   async function requestPicks(pass: string): Promise<RecommendationSheetEntry[]> {
     mark(`claude call start (${pass}, cutoff=${cutoffMonth})`);
-    const recencyRule =
-      "HARD RULE 2: only NEW shows — first released within the last " +
-      `${RECENCY_MONTHS} months (release month on or after the cutoff given below). ` +
-      "An older title is never acceptable, no matter how well it fits; pick a different new one instead. ";
 
     let rawText = "";
     const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
       system:
         "You are Brittany's TV/movie recommendation agent. " +
-        "Recommend exactly 3 fresh, currently watchable US streaming titles she has NOT seen — " +
-        "plus, when a genuinely exciting fit exists, 1 UPCOMING title as a bonus fourth pick. " +
-        "HARD RULE 1: the 3 main titles must be fully released and streamable in the US TODAY — use web search " +
-        "to verify the release date and platform; never pass off upcoming or announced-only titles as watchable. " +
-        "The optional upcoming pick is the one exception: it must have a confirmed US premiere date within the " +
-        `next ${UPCOMING_HORIZON_MONTHS} months — set available_now to false and release_date to the exact ` +
-        "premiere date as YYYY-MM-DD (skip the upcoming pick if you cannot confirm an exact date). " +
-        recencyRule +
+        "You are given candidate pools pulled from TMDB — release dates, US streaming platforms, and " +
+        "streamability are already verified, so trust them as-is; no research needed. " +
+        "Pick the 3 titles from the RELEASED candidates that best fit her taste — plus, when one is a " +
+        "genuinely exciting fit, 1 bonus pick from the UPCOMING candidates. " +
+        "HARD RULE: choose ONLY from the candidate lists; never add a title that is not listed. " +
+        "Copy title, release_date, platform, and type straight from the candidate entry; set available_now " +
+        "to true for RELEASED picks and false for the UPCOMING pick. " +
         audienceRule +
-        "If you cannot verify 3 qualifying titles in the time available, return the ones you CAN " +
-        "verify — 1 or 2 solid new picks beat an empty list; an empty list is a failed run. " +
-        "Prefer the newest, currently-buzzing releases; source the buzz claim from your search. " +
+        "If genuinely nothing in the pool fits her taste, return fewer — but she wants fresh picks, so " +
+        "find the best available 3 unless the pool is truly hopeless. " +
         TASTE_VOICE +
-        ' After any searching, end your reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
+        ' Reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
         FIELD_SPEC +
-        " Never recommend excluded titles. Real shows only.",
+        " For buzz_source, use the TMDB popularity/rating framing or what the premise promises — no invented press quotes.",
       user:
         `Today's date: ${today}\n` +
-        `Recency cutoff: only titles first released in ${cutoffMonth} or later.\n` +
         `\nHer ratings library (most recent / highest rated):\n${libraryJson}\n\n` +
         `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
         `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
-        `Excluded titles (never recommend):\n- ${excludedBlock}`,
-      // Must finish inside Vercel's function window even with the retry
-      // pass — no SDK retry (the retry pass is the retry).
-      // Keep effort low (at "medium" this call deliberated past every
-      // timeout), but allow 3 searches: with only 2, the model could not
-      // verify release+platform for 3 titles and kept returning [].
-      webSearches: 3,
+        `RELEASED candidates (streamable in the US now):\n${releasedCandidates.map(formatCandidate).join("\n")}\n\n` +
+        `UPCOMING candidates (premiere dates confirmed):\n${upcomingCandidates.map(formatCandidate).join("\n") || "(none)"}`,
+      // No web search: the pool is pre-verified, so this is a pure taste-
+      // matching call — fast and immune to search-tool outages.
+      webSearches: 0,
       effort: "low",
       maxTokens: 4096,
-      // 360s each: two passes plus sheet writes still fit the 800s window.
-      // The 2026-08-29 runs aborted at the old 240s on three of four passes.
-      timeoutMs: 360_000,
+      timeoutMs: 300_000,
       maxRetries: 0,
       onText: (text) => {
         rawText = text;
@@ -274,6 +314,29 @@ export async function runRecommendationRefresh(
       .map(normalizeRecommendationDraft)
       .filter((entry): entry is RecommendationSheetEntry => entry != null)
       .filter((entry) => !excludedKeys.has(normalizeTitle(entry.title)))
+      // Anchor every pick to its TMDB candidate: a title outside the pool is
+      // dropped, and the candidate's verified date/platform win over the
+      // model's copy.
+      .map((entry) => {
+        const key = normalizeTitle(entry.title);
+        const released = releasedByKey.get(key);
+        const upcoming = upcomingByKey.get(key);
+        const candidate = released ?? upcoming;
+        if (!candidate) return null;
+        return {
+          ...entry,
+          title: candidate.title,
+          // Released picks keep the usual YYYY-MM; upcoming keep the exact
+          // premiere day for the "Coming <date>" label.
+          release_date: released
+            ? candidate.releaseDate.slice(0, 7)
+            : candidate.releaseDate,
+          platform: candidate.platform || entry.platform,
+          type: entry.type || (candidate.kind === "tv" ? "Series" : "Movie"),
+          available_now: Boolean(released),
+        };
+      })
+      .filter((entry): entry is RecommendationSheetEntry => entry != null)
       // Hard gates: released picks must be streamable now with a release
       // month that is not in the future and (when a cutoff applies) not too
       // old. Upcoming picks are allowed only with a premiere inside the
