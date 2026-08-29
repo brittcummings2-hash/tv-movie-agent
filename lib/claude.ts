@@ -32,6 +32,8 @@ export interface ClaudeJsonRequest {
   timeoutMs?: number;
   /** SDK retries; default 1. Pass 0 when the caller owns its own fallback. */
   maxRetries?: number;
+  /** Observe the raw response text (pre-parse) — for diagnosing empty payloads. */
+  onText?: (text: string) => void;
 }
 
 /**
@@ -106,6 +108,8 @@ export async function askClaudeJson<T>(request: ClaudeJsonRequest): Promise<T> {
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
     .map((block) => block.text)
     .join("\n");
+
+  request.onText?.(text);
 
   if (!text.trim()) {
     throw new Error("Claude returned no content");
