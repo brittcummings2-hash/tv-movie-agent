@@ -221,6 +221,7 @@ export async function runRecommendationRefresh(
       `${RECENCY_MONTHS} months (release month on or after the cutoff given below). ` +
       "An older title is never acceptable, no matter how well it fits; pick a different new one instead. ";
 
+    let rawText = "";
     const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
       system:
         "You are Brittany's TV/movie recommendation agent. " +
@@ -259,11 +260,15 @@ export async function runRecommendationRefresh(
       // The 2026-08-29 runs aborted at the old 240s on three of four passes.
       timeoutMs: 360_000,
       maxRetries: 0,
+      onText: (text) => {
+        rawText = text;
+      },
     });
     const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
     mark(`claude call done (${pass}, drafts=${drafts.length})`);
     if (drafts.length === 0) {
-      mark(`empty drafts, payload keys: ${JSON.stringify(parsed).slice(0, 300)}`);
+      // The model's prose usually says WHY it came back empty — surface it.
+      mark(`empty drafts, response text head: ${rawText.slice(0, 800)}`);
     }
     const kept = drafts
       .map(normalizeRecommendationDraft)
