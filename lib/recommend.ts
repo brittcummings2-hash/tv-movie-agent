@@ -250,10 +250,10 @@ export async function runRecommendationRefresh(
         `Excluded titles (never recommend):\n- ${excludedBlock}`,
       // Must finish inside Vercel's function window even with the retry
       // pass — no SDK retry (the retry pass is the retry).
-      // Kept deliberately light: at effort "medium" with 3 searches this
-      // call deliberated past every timeout (a 12s profile call proved the
-      // API itself was fine), so picks ran dry for weeks.
-      webSearches: 2,
+      // Keep effort low (at "medium" this call deliberated past every
+      // timeout), but allow 3 searches: with only 2, the model could not
+      // verify release+platform for 3 titles and kept returning [].
+      webSearches: 3,
       effort: "low",
       maxTokens: 4096,
       // 360s each: two passes plus sheet writes still fit the 800s window.
