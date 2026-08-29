@@ -642,6 +642,132 @@ async function considerResults(
   }
 }
 
+// Static TMDB genre-id maps — stable per TMDB docs, saves a config fetch.
+const TV_GENRES: Record<number, string> = {
+  10759: "Action & Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+  99: "Documentary", 18: "Drama", 10751: "Family", 10762: "Kids",
+  9648: "Mystery", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy",
+  10766: "Soap", 10767: "Talk", 10768: "War & Politics", 37: "Western",
+};
+const MOVIE_GENRES: Record<number, string> = {
+  28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
+  99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy",
+  36: "History", 27: "Horror", 10402: "Music", 9648: "Mystery",
+  10749: "Romance", 878: "Science Fiction", 10770: "TV Movie",
+  53: "Thriller", 10752: "War", 37: "Western",
+};
+
+export interface DiscoverCandidate {
+  tmdbId: number;
+  title: string;
+  kind: MediaKind;
+  releaseDate: string; // YYYY-MM-DD
+  platform: string;
+  genres: string[];
+  overview: string;
+  popularity: number;
+  tmdbRating: number | null;
+}
+
+interface DiscoverItem extends TmdbSearchItem {
+  genre_ids?: number[];
+  vote_average?: number;
+  original_language?: string;
+}
+
+async function discoverPage(
+  kind: MediaKind,
+  dateGte: string,
+  dateLte: string,
+  page: number,
+  requireStreamable = true
+): Promise<DiscoverItem[]> {
+  const dateField = kind === "tv" ? "first_air_date" : "primary_release_date";
+  const params = new URLSearchParams({
+    sort_by: "popularity.desc",
+    page: String(page),
+    [`${dateField}.gte`]: dateGte,
+    [`${dateField}.lte`]: dateLte,
+    ...(requireStreamable
+      ? {
+          watch_region: getWatchRegion(),
+          with_watch_monetization_types: "flatrate|free|ads",
+        }
+      : {}),
+    ...(kind === "tv" ? { include_null_first_air_dates: "false" } : {}),
+  });
+  const res = await tmdbFetch(`/discover/${kind}?${params.toString()}`);
+  if (!res) return [];
+  const data = (await res.json()) as { results?: DiscoverItem[] };
+  return data.results ?? [];
+}
+
+/**
+ * Popular titles first released in [fromDate, toDate] that are streamable in
+ * the watch region — release dates and platforms verified by TMDB, so the
+ * recommendation engine doesn't have to trust (or search) the open web.
+ */
+export async function discoverRecentCandidates(options: {
+  fromDate: string;
+  toDate: string;
+  limit?: number;
+  excludeTitleKeys?: Set<string>;
+  /** Upcoming titles have no providers yet — drop the streamability filter. */
+  requireStreamable?: boolean;
+}): Promise<DiscoverCandidate[]> {
+  const limit = options.limit ?? 30;
+  const streamable = options.requireStreamable ?? true;
+  const pages = await Promise.all([
+    discoverPage("tv", options.fromDate, options.toDate, 1, streamable),
+    discoverPage("tv", options.fromDate, options.toDate, 2, streamable),
+    discoverPage("movie", options.fromDate, options.toDate, 1, streamable),
+    discoverPage("movie", options.fromDate, options.toDate, 2, streamable),
+  ]);
+
+  const pool: Array<{ item: DiscoverItem; kind: MediaKind }> = [
+    ...pages[0].map((item) => ({ item, kind: "tv" as MediaKind })),
+    ...pages[1].map((item) => ({ item, kind: "tv" as MediaKind })),
+    ...pages[2].map((item) => ({ item, kind: "movie" as MediaKind })),
+    ...pages[3].map((item) => ({ item, kind: "movie" as MediaKind })),
+  ];
+
+  const seen = new Set<string>();
+  const shortlist: Array<{ item: DiscoverItem; kind: MediaKind }> = [];
+  for (const entry of pool.sort(
+    (a, b) => (b.item.popularity ?? 0) - (a.item.popularity ?? 0)
+  )) {
+    const title = ((entry.kind === "tv" ? entry.item.name : entry.item.title) ?? "").trim();
+    if (!title || !entry.item.id) continue;
+    const key = normalizeTitle(title);
+    if (seen.has(key) || options.excludeTitleKeys?.has(key)) continue;
+    seen.add(key);
+    shortlist.push(entry);
+    if (shortlist.length >= limit) break;
+  }
+
+  return Promise.all(
+    shortlist.map(async ({ item, kind }) => {
+      const genreMap = kind === "tv" ? TV_GENRES : MOVIE_GENRES;
+      const vote = Number(item.vote_average);
+      return {
+        tmdbId: item.id ?? 0,
+        title: ((kind === "tv" ? item.name : item.title) ?? "").trim(),
+        kind,
+        releaseDate: String(
+          (kind === "tv" ? item.first_air_date : item.release_date) ?? ""
+        ).trim(),
+        platform: await fetchWatchPlatform(item.id ?? 0, kind),
+        genres: (item.genre_ids ?? [])
+          .map((id) => genreMap[id])
+          .filter((name): name is string => Boolean(name)),
+        overview: String(item.overview ?? "").trim().slice(0, 260),
+        popularity: item.popularity ?? 0,
+        tmdbRating: Number.isFinite(vote) && vote > 0 ? vote : null,
+      };
+    })
+  );
+}
+
 export async function lookupTmdbImages(title: string, kind: MediaKind): Promise<TmdbImages> {
   const resolved = await resolveTmdbTitle(title, kind);
   if (!resolved) {
