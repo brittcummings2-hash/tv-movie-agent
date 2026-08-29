@@ -8,7 +8,7 @@ import {
 } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
-// The engine run (Claude + web searches, sometimes a second catalog pass)
+// The engine run (Claude + web searches, sometimes a second retry pass)
 // can exceed 300s — the 2026-08-17 cron timed out exactly there. 800 is the
 // Pro-plan Fluid compute ceiling.
 export const maxDuration = 800;

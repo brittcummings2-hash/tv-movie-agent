@@ -71,16 +71,15 @@ export async function buildTasteSummary(): Promise<{
       ...(item.watched_with ? { watched_with: item.watched_with } : {}),
     }));
 
+  // Every title that has EVER been recommended is off the table — a repeat
+  // is never "new", whether or not she acted on the old card. Only her
+  // library plus accepted/dismissed recs used to count, so un-actioned recs
+  // kept coming back run after run.
   const excludedTitles = [
     ...new Set(
       [
         ...library.map((item) => item.show_title),
-        ...recommendations
-          .filter((rec) => {
-            const action = rec.user_action.trim().toLowerCase();
-            return action === "accept" || action === "dismiss";
-          })
-          .map((rec) => rec.title),
+        ...recommendations.map((rec) => rec.title),
       ].filter(Boolean)
     ),
   ];
@@ -178,7 +177,9 @@ export async function runRecommendationRefresh(
   const { libraryJson, excludedTitles, activeRecTitles, dismissedFeedbackJson } =
     await buildTasteSummary();
   mark("taste summary built");
-  const excludedBlock = excludedTitles.slice(0, 120).join("\n- ");
+  // The list now carries every past rec and grows daily; show the model as
+  // much as reasonable (the normalized-title hard filter catches the rest).
+  const excludedBlock = excludedTitles.slice(0, 300).join("\n- ");
   const today = new Date().toISOString().slice(0, 10);
   const currentMonth = today.slice(0, 7);
   const excludedKeys = new Set(excludedTitles.map(normalizeTitle));
@@ -213,14 +214,12 @@ export async function runRecommendationRefresh(
       : "These picks are for Brittany watching solo. Shows tagged watched_with: 'blake' are joint watches — " +
         "still valid taste signal, but weight her solo favorites most. ";
 
-  async function requestPicks(minMonth: string | null): Promise<RecommendationSheetEntry[]> {
-    mark(`claude call start (minMonth=${minMonth ?? "open"})`);
-    const recencyRule = minMonth
-      ? "HARD RULE 2: only NEW shows — first released within the last " +
-        `${RECENCY_MONTHS} months (release month on or after the cutoff given below). ` +
-        "An older title is never acceptable, no matter how well it fits; pick a different new one instead. "
-      : "The catalog is open: any release age is fine as long as it is a strong taste fit " +
-        "she has NOT seen, but still prefer the newest options available. ";
+  async function requestPicks(pass: string): Promise<RecommendationSheetEntry[]> {
+    mark(`claude call start (${pass}, cutoff=${cutoffMonth})`);
+    const recencyRule =
+      "HARD RULE 2: only NEW shows — first released within the last " +
+      `${RECENCY_MONTHS} months (release month on or after the cutoff given below). ` +
+      "An older title is never acceptable, no matter how well it fits; pick a different new one instead. ";
 
     const parsed = await askClaudeJson<{ recommendations?: RecommendationDraft[] }>({
       system:
@@ -241,7 +240,7 @@ export async function runRecommendationRefresh(
         " Never recommend excluded titles. Real shows only.",
       user:
         `Today's date: ${today}\n` +
-        (minMonth ? `Recency cutoff: only titles first released in ${minMonth} or later.\n` : "") +
+        `Recency cutoff: only titles first released in ${cutoffMonth} or later.\n` +
         `\nHer ratings library (most recent / highest rated):\n${libraryJson}\n\n` +
         `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
         `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
@@ -259,7 +258,7 @@ export async function runRecommendationRefresh(
       maxRetries: 0,
     });
     const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
-    mark(`claude call done (minMonth=${minMonth ?? "open"}, drafts=${drafts.length})`);
+    mark(`claude call done (${pass}, drafts=${drafts.length})`);
     if (drafts.length === 0) {
       mark(`empty drafts, payload keys: ${JSON.stringify(parsed).slice(0, 300)}`);
     }
@@ -276,7 +275,7 @@ export async function runRecommendationRefresh(
         if (!/^\d{4}-\d{2}$/.test(month)) return false;
         if (entry.available_now) {
           if (month > currentMonth) return false;
-          return minMonth ? month >= minMonth : true;
+          return month >= cutoffMonth;
         }
         return month > currentMonth && month <= horizonMonth;
       })
@@ -305,38 +304,36 @@ export async function runRecommendationRefresh(
     return kept;
   }
 
-  // A stalled/failed first pass must not kill the run — the catalog pass
-  // below doubles as its retry.
+  // A stalled/failed first pass must not kill the run — the retry pass
+  // below covers it. Both passes carry the same recency cutoff: an old
+  // catalog title never comes in, not even as a fallback. A dry day beats
+  // a stale pick.
   let entries: RecommendationSheetEntry[] = [];
   let firstPassError: unknown = null;
   try {
-    entries = await requestPicks(cutoffMonth);
+    entries = await requestPicks("first pass");
   } catch (error) {
     firstPassError = error;
     mark(`first pass failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // Safety net: if nothing watchable-now survived (an upcoming bonus alone
-  // doesn't count), dip into the catalog once — labeled so the cards say so.
-  // A failed catalog pass must not throw away what the first pass DID yield.
+  // If nothing watchable-now survived (an upcoming bonus alone doesn't
+  // count), take one more new-releases-only swing. A failed retry must not
+  // throw away what the first pass DID yield.
   if (!entries.some((entry) => entry.available_now)) {
     try {
-      const catalog = (await requestPicks(null))
-        .filter((entry) => entry.available_now)
-        .map((entry) => ({
-          ...entry,
-          why_options_positive: ["Catalog pick", entry.why_options_positive]
-            .filter(Boolean)
-            .join(" | "),
-        }));
-      entries = [...catalog, ...entries];
+      const seen = new Set(entries.map((entry) => normalizeTitle(entry.title)));
+      const retry = (await requestPicks("retry pass")).filter(
+        (entry) => entry.available_now && !seen.has(normalizeTitle(entry.title))
+      );
+      entries = [...retry, ...entries];
     } catch (error) {
-      mark(`catalog pass failed: ${error instanceof Error ? error.message : String(error)}`);
+      mark(`retry pass failed: ${error instanceof Error ? error.message : String(error)}`);
       if (entries.length === 0 && firstPassError) throw firstPassError;
       if (entries.length === 0) throw error;
     }
     if (entries.length > 0 && firstPassError) {
-      console.error("recommendation first pass failed, catalog pass covered:", firstPassError);
+      console.error("recommendation first pass failed, retry pass covered:", firstPassError);
     }
   }
 
