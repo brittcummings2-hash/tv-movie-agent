@@ -233,6 +233,8 @@ export async function runRecommendationRefresh(
         "premiere date as YYYY-MM-DD (skip the upcoming pick if you cannot confirm an exact date). " +
         recencyRule +
         audienceRule +
+        "If you cannot verify 3 qualifying titles in the time available, return the ones you CAN " +
+        "verify — 1 or 2 solid new picks beat an empty list; an empty list is a failed run. " +
         "Prefer the newest, currently-buzzing releases; source the buzz claim from your search. " +
         TASTE_VOICE +
         ' After any searching, end your reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
@@ -245,16 +247,17 @@ export async function runRecommendationRefresh(
         `Recs she dismissed, with her reasons (treat as avoid-patterns):\n${dismissedFeedbackJson}\n\n` +
         `Already visible active recs (pick different titles):\n- ${activeRecTitles.join("\n- ") || "(none)"}\n\n` +
         `Excluded titles (never recommend):\n- ${excludedBlock}`,
-      // Must finish inside Vercel's function window even with the fallback
-      // pass — 5 minutes per call, no SDK retry (the fallback is the retry).
+      // Must finish inside Vercel's function window even with the retry
+      // pass — no SDK retry (the retry pass is the retry).
       // Kept deliberately light: at effort "medium" with 3 searches this
       // call deliberated past every timeout (a 12s profile call proved the
       // API itself was fine), so picks ran dry for weeks.
       webSearches: 2,
       effort: "low",
       maxTokens: 4096,
-      // 240s each: two passes plus sheet writes must fit the 800s window.
-      timeoutMs: 240_000,
+      // 360s each: two passes plus sheet writes still fit the 800s window.
+      // The 2026-08-29 runs aborted at the old 240s on three of four passes.
+      timeoutMs: 360_000,
       maxRetries: 0,
     });
     const drafts = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
