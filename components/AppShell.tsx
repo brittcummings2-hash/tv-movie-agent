@@ -538,6 +538,7 @@ export function AppShell() {
           platform: item.platform,
           release_date: item.release_date,
           watch_status: item.watch_status,
+          watched_with: item.watched_with,
         }),
       });
       const data = await res.json();

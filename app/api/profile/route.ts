@@ -25,6 +25,7 @@ export async function POST(request: Request) {
       platform: String(body.platform ?? ""),
       release_date: String(body.release_date ?? ""),
       watch_status: String(body.watch_status ?? "watching"),
+      watched_with: String(body.watched_with ?? ""),
     });
 
     if (!recommendation) {
