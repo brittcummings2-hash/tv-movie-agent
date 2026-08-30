@@ -303,12 +303,17 @@ function scoreMatch(
   const qNorm = normalizeTitle(query);
   const nNorm = normalizeTitle(name);
   const itemYear = getItemYear(item, kind);
-  let score = (item.popularity ?? 0) * 0.35 + (item.vote_count ?? 0) * 0.04;
+  // Popularity breaks ties between similar matches; capped so it can never
+  // outvote an exact title match ("Hacks" once resolved to Hacksaw Ridge
+  // because its ~15k votes at 0.04/vote buried the exact-match bonus).
+  let score =
+    Math.min((item.popularity ?? 0) * 0.35, 80) +
+    Math.min((item.vote_count ?? 0) * 0.04, 120);
 
   const exactMatch = qNorm === nNorm;
   const closeMatch = qNorm.includes(nNorm) || nNorm.includes(qNorm);
 
-  if (exactMatch) score += 220;
+  if (exactMatch) score += 400;
   else if (closeMatch) score += 100;
   else if (qNorm.split(" ").every((word) => word.length > 2 && nNorm.includes(word))) score += 60;
   else score -= 40;

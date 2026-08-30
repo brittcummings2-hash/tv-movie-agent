@@ -280,8 +280,9 @@ export async function runRecommendationRefresh(
         "Copy title, release_date, platform, and type straight from the candidate entry; set available_now " +
         "to true for RELEASED picks and false for the UPCOMING pick. " +
         audienceRule +
-        "If genuinely nothing in the pool fits her taste, return fewer — but she wants fresh picks, so " +
-        "find the best available 3 unless the pool is truly hopeless. " +
+        "Quality over quantity: she would rather get 1-2 genuine taste fits — or none at all today — " +
+        "than a filler pick. Never pad the list with a mediocre fit; only recommend titles you'd " +
+        "honestly score 7+ for her. " +
         TASTE_VOICE +
         ' Reply with JSON only: { "recommendations": [ ... ] }. Each item keys: ' +
         FIELD_SPEC +
