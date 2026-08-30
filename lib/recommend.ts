@@ -439,6 +439,8 @@ export interface TitleProfileHints {
   release_date?: string;
   type?: string;
   watch_status?: string;
+  /** 'blake' = a joint watch — profile against their shared taste, not her solo lane. */
+  watched_with?: string;
 }
 
 async function loadRecommendations(): Promise<Recommendation[]> {
@@ -477,6 +479,15 @@ async function generateTitleProfile(hints: TitleProfileHints): Promise<Recommend
     .filter(Boolean)
     .join(", ");
 
+  // A joint watch is scored against their shared taste, not her solo lane —
+  // Hacks got a 5 as a solo thriller fit when it's really a with-Blake show.
+  const isJointWatch = (hints.watched_with ?? "").trim().toLowerCase() === "blake";
+  const profileAudience = isJointWatch
+    ? "She is watching THIS title WITH her husband Blake, so judge the fit against their JOINT taste: " +
+      "anchor on library shows tagged watched_with: 'blake' — those are their shared watches — and " +
+      "weight those far more than her solo thriller lane. "
+    : "She is watching this solo, so judge the fit against her own taste. ";
+
   const verifiedBlock = resolved
     ? [
         `canonical title: ${resolved.canonicalTitle}`,
@@ -494,7 +505,8 @@ async function generateTitleProfile(hints: TitleProfileHints): Promise<Recommend
     system:
       "You are Brittany's TV/movie recommendation agent. " +
       TASTE_VOICE +
-      " She manually added a title to her library — profile THIS exact title for her taste, honestly. " +
+      " She manually added a title to her library — profile THIS exact title honestly. " +
+      profileAudience +
       "The verified TMDB metadata below is ground truth: never contradict it and never describe a " +
       "different show under this title. If the show is a weak fit for her taste, say so with a low " +
       "fit_score and honest cautions — she added it herself, so a low score is fine. " +
