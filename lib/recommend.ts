@@ -1,5 +1,10 @@
 import { filterActiveRecommendations, findRecommendationForTitle, normalizeTitle } from "./search";
-import { discoverRecentCandidates, type DiscoverCandidate } from "./tmdb";
+import {
+  discoverRecentCandidates,
+  inferMediaKind,
+  resolveTmdbTitle,
+  type DiscoverCandidate,
+} from "./tmdb";
 import { askClaudeJson, isClaudeConfigured } from "./claude";
 import { mapRecommendations, mapUserRatings } from "./mappers";
 import {
@@ -453,6 +458,16 @@ async function markRecommendationAccepted(rec: Recommendation): Promise<Recommen
 async function generateTitleProfile(hints: TitleProfileHints): Promise<RecommendationSheetEntry> {
   const { libraryJson } = await buildTasteSummary();
   const title = hints.title.trim();
+
+  // Ground the profile in TMDB — with web search unreliable, an unanchored
+  // model call once profiled a completely different show under her title
+  // ('Hacks' came back as a Nantucket wedding mystery on Netflix).
+  const hintKind = hints.type ? inferMediaKind(hints.type) : undefined;
+  const resolved = await resolveTmdbTitle(title, hintKind, {
+    releaseDate: hints.release_date,
+    skipPlatform: Boolean(hints.platform?.trim()),
+  });
+
   const metadata = [
     hints.platform ? `platform: ${hints.platform}` : "",
     hints.release_date ? `release: ${hints.release_date}` : "",
@@ -462,20 +477,36 @@ async function generateTitleProfile(hints: TitleProfileHints): Promise<Recommend
     .filter(Boolean)
     .join(", ");
 
+  const verifiedBlock = resolved
+    ? [
+        `canonical title: ${resolved.canonicalTitle}`,
+        resolved.releaseDate ? `first released: ${resolved.releaseDate}` : "",
+        resolved.platform ? `platform: ${resolved.platform}` : "",
+        resolved.mediaTypeLabel ? `type: ${resolved.mediaTypeLabel}` : "",
+        resolved.genres.length ? `genres: ${resolved.genres.join(", ")}` : "",
+        resolved.overview ? `synopsis: ${resolved.overview}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
   const parsed = await askClaudeJson<{ recommendation?: RecommendationDraft }>({
     system:
       "You are Brittany's TV/movie recommendation agent. " +
       TASTE_VOICE +
-      " She manually added a title to her library — profile THIS exact title for her taste. " +
-      "If the title is recent or unfamiliar, use web search to confirm what it is. " +
-      ' After any searching, end your reply with JSON only: { "recommendation": { ... } }. Fields: ' +
+      " She manually added a title to her library — profile THIS exact title for her taste, honestly. " +
+      "The verified TMDB metadata below is ground truth: never contradict it and never describe a " +
+      "different show under this title. If the show is a weak fit for her taste, say so with a low " +
+      "fit_score and honest cautions — she added it herself, so a low score is fine. " +
+      ' Reply with JSON only: { "recommendation": { ... } }. Fields: ' +
       FIELD_SPEC +
-      " Real US streaming title only. Title must match exactly.",
+      " Title must match exactly.",
     user:
       `Title to profile: "${title}"` +
       (metadata ? `\nKnown metadata: ${metadata}` : "") +
+      (verifiedBlock ? `\n\nVerified TMDB metadata (ground truth):\n${verifiedBlock}` : "") +
       `\n\nHer ratings library (most recent / highest rated):\n${libraryJson}`,
-    webSearches: 1,
+    webSearches: 0,
     maxTokens: 4096,
     effort: "low",
   });
@@ -487,7 +518,14 @@ async function generateTitleProfile(hints: TitleProfileHints): Promise<Recommend
     throw new Error("Could not profile this title");
   }
 
-  return mergeDraftWithHints(draft, hints);
+  // Her row and TMDB outrank whatever the model wrote for the factual fields.
+  const merged = mergeDraftWithHints(draft, hints);
+  return {
+    ...merged,
+    platform: hints.platform?.trim() || resolved?.platform || merged.platform,
+    release_date: hints.release_date?.trim() || resolved?.releaseDate || merged.release_date,
+    type: hints.type?.trim() || resolved?.mediaTypeLabel || merged.type,
+  };
 }
 
 /**
