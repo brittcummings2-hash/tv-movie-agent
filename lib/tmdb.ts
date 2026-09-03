@@ -238,13 +238,14 @@ async function fetchWatchPlatform(id: number, kind: MediaKind): Promise<string> 
   const regionData = data.results?.[region];
   if (!regionData) return "";
 
-  const streaming =
-    regionData.flatrate ??
-    regionData.free ??
-    regionData.ads ??
-    regionData.rent ??
-    regionData.buy ??
-    [];
+  // Streaming only. Falling back to rent/buy mislabeled rent-only titles as
+  // streamable — TMDB's rent/buy storefront is literally named "Apple TV",
+  // so picks claimed to stream on Apple TV when they were only rentable.
+  const streaming = [
+    ...(regionData.flatrate ?? []),
+    ...(regionData.free ?? []),
+    ...(regionData.ads ?? []),
+  ];
 
   return pickStreamingPlatform(streaming);
 }
