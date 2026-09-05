@@ -7,6 +7,11 @@ export interface TmdbImages {
   heroUrl: string | null;
 }
 
+export interface SeasonShape {
+  season: number;
+  episodes: number;
+}
+
 export interface TmdbResolveResult extends TmdbImages {
   canonicalTitle: string;
   releaseDate: string;
@@ -21,6 +26,8 @@ export interface TmdbResolveResult extends TmdbImages {
   nextEpisodeAirDate: string | null;
   seriesStatus: string | null;
   trailerUrl: string | null;
+  /** Real per-season episode counts (TV only) — bounds the episode tracker. */
+  seasons: SeasonShape[] | null;
 }
 
 const cache = new Map<string, { data: TmdbResolveResult | null; expires: number }>();
@@ -377,6 +384,7 @@ async function fetchDetail(
   nextEpisodeAirDate: string | null;
   seriesStatus: string | null;
   trailerUrl: string | null;
+  seasons: SeasonShape[] | null;
 }> {
   const path = kind === "tv" ? `/tv/${id}` : `/movie/${id}`;
   const res = await tmdbFetch(`${path}?append_to_response=videos`);
@@ -390,6 +398,7 @@ async function fetchDetail(
       nextEpisodeAirDate: null,
       seriesStatus: null,
       trailerUrl: null,
+      seasons: null,
     };
   }
 
@@ -402,7 +411,20 @@ async function fetchDetail(
     status?: string;
     next_episode_to_air?: { air_date?: string } | null;
     videos?: { results?: TmdbVideo[] };
+    seasons?: Array<{ season_number?: number; episode_count?: number }>;
   };
+
+  // Specials (season 0) are skipped; the tracker only walks real seasons.
+  const seasons =
+    kind === "tv"
+      ? (data.seasons ?? [])
+          .map((season) => ({
+            season: Number(season.season_number) || 0,
+            episodes: Number(season.episode_count) || 0,
+          }))
+          .filter((season) => season.season >= 1 && season.episodes > 0)
+          .sort((a, b) => a.season - b.season)
+      : null;
 
   const genres = (data.genres ?? [])
     .map((genre) => String(genre.name ?? "").trim())
@@ -423,6 +445,7 @@ async function fetchDetail(
       kind === "tv" ? data.next_episode_to_air?.air_date?.trim() || null : null,
     seriesStatus: kind === "tv" ? String(data.status ?? "").trim() || null : null,
     trailerUrl: pickTrailerUrl(data.videos?.results ?? []),
+    seasons: seasons && seasons.length > 0 ? seasons : null,
   };
 }
 
@@ -527,6 +550,7 @@ async function toResolveResult(
   let nextEpisodeAirDate: string | null = null;
   let seriesStatus: string | null = null;
   let trailerUrl: string | null = null;
+  let seasons: SeasonShape[] | null = null;
   if (item.id) {
     const detail = await fetchDetail(item.id, kind);
     if (!overview) overview = detail.overview;
@@ -537,6 +561,7 @@ async function toResolveResult(
     nextEpisodeAirDate = detail.nextEpisodeAirDate;
     seriesStatus = detail.seriesStatus;
     trailerUrl = detail.trailerUrl;
+    seasons = detail.seasons;
   }
 
   return {
@@ -555,6 +580,7 @@ async function toResolveResult(
     nextEpisodeAirDate,
     seriesStatus,
     trailerUrl,
+    seasons,
   };
 }
 

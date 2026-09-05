@@ -157,6 +157,7 @@ export async function attachRatingImages(items: UserRating[]): Promise<UserRatin
         next_episode_air_date: resolved?.nextEpisodeAirDate ?? null,
         series_status: resolved?.seriesStatus ?? null,
         trailerUrl: resolved?.trailerUrl ?? null,
+        seasons: resolved?.seasons ?? null,
       };
     })
   );

@@ -102,6 +102,7 @@ export function LibrarySection({
               ? {
                   season: item.current_season,
                   episode: item.current_episode,
+                  seasons: item.seasons,
                   onChange: (season: number, episode: number) =>
                     onUpdateProgress(item, season, episode),
                 }

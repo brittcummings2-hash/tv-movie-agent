@@ -24,6 +24,7 @@ interface MediaCardProps {
   progress?: {
     season: number;
     episode: number;
+    seasons?: { season: number; episodes: number }[] | null;
     onChange: (season: number, episode: number) => void;
   } | null;
 }
@@ -31,10 +32,12 @@ interface MediaCardProps {
 function ProgressControl({
   season,
   episode,
+  seasons,
   onChange,
 }: {
   season: number;
   episode: number;
+  seasons?: { season: number; episodes: number }[] | null;
   onChange: (season: number, episode: number) => void;
 }) {
   if (season < 1) {
@@ -47,17 +50,47 @@ function ProgressControl({
     );
   }
 
+  // Bound the tracker to the show's real shape when TMDB knows it — no more
+  // walking a 1-season comedy up to S5, and no season-skip button on shows
+  // with nothing to skip to.
+  const shape = seasons && seasons.length > 0 ? seasons : null;
+  const maxSeason = shape ? shape[shape.length - 1].season : Infinity;
+  const clampedSeason = shape ? Math.min(season, maxSeason) : season;
+  const episodesInSeason = (s: number) =>
+    shape?.find((entry) => entry.season === s)?.episodes ?? Infinity;
+  const clampedEpisode = Math.max(1, Math.min(episode, episodesInSeason(clampedSeason)));
+  const seasonTotal = episodesInSeason(clampedSeason);
+
+  const hasNextSeason = clampedSeason < maxSeason;
+  const atSeasonEnd = clampedEpisode >= seasonTotal;
+  const atSeriesEnd = atSeasonEnd && !hasNextSeason && shape != null;
+  const hasPrevSeason = shape != null && clampedSeason > shape[0].season;
+
+  function stepForward() {
+    if (!atSeasonEnd) onChange(clampedSeason, clampedEpisode + 1);
+    else if (hasNextSeason) onChange(clampedSeason + 1, 1);
+  }
+
+  function stepBack() {
+    if (clampedEpisode > 1) onChange(clampedSeason, clampedEpisode - 1);
+    else if (hasPrevSeason) {
+      const prev = clampedSeason - 1;
+      onChange(prev, episodesInSeason(prev) === Infinity ? 1 : episodesInSeason(prev));
+    }
+  }
+
   return (
     <div className="media-card-progress">
       <span className="progress-label">
-        S{season} · E{episode}
+        S{clampedSeason} · E{clampedEpisode}
+        {Number.isFinite(seasonTotal) ? `/${seasonTotal}` : ""}
       </span>
       <button
         type="button"
         className="progress-btn"
         aria-label="Previous episode"
-        onClick={() => (episode > 1 ? onChange(season, episode - 1) : undefined)}
-        disabled={episode <= 1}
+        onClick={stepBack}
+        disabled={clampedEpisode <= 1 && !hasPrevSeason}
       >
         −
       </button>
@@ -65,19 +98,22 @@ function ProgressControl({
         type="button"
         className="progress-btn"
         aria-label="Next episode"
-        onClick={() => onChange(season, episode + 1)}
+        onClick={stepForward}
+        disabled={atSeriesEnd}
       >
         +
       </button>
-      <button
-        type="button"
-        className="progress-btn progress-btn-season"
-        aria-label="Start next season"
-        title="Start next season"
-        onClick={() => onChange(season + 1, 1)}
-      >
-        S{season + 1} →
-      </button>
+      {(!shape || hasNextSeason) && (
+        <button
+          type="button"
+          className="progress-btn progress-btn-season"
+          aria-label="Start next season"
+          title="Start next season"
+          onClick={() => onChange(clampedSeason + 1, 1)}
+        >
+          S{clampedSeason + 1} →
+        </button>
+      )}
     </div>
   );
 }
@@ -175,6 +211,7 @@ export function MediaCard({
           <ProgressControl
             season={progress.season}
             episode={progress.episode}
+            seasons={progress.seasons}
             onChange={progress.onChange}
           />
         )}

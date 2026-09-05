@@ -33,6 +33,8 @@ export interface UserRating {
   next_episode_air_date?: string | null;
   series_status?: string | null;
   trailerUrl?: string | null;
+  /** Real per-season episode counts from TMDB — bounds the episode tracker. */
+  seasons?: { season: number; episodes: number }[] | null;
 }
 
 export interface Recommendation {
