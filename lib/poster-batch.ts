@@ -1,4 +1,4 @@
-import { inferMediaKind, resolveTmdbTitle, type MediaKind } from "./tmdb";
+import { inferMediaKind, resolveTmdbTitle, type MediaKind, type SeasonShape } from "./tmdb";
 
 export interface PosterRequestItem {
   id: string;
@@ -17,6 +17,8 @@ export interface LibraryMediaMetadata {
   nextEpisodes: Record<string, string | null>;
   seriesStatuses: Record<string, string | null>;
   trailers: Record<string, string | null>;
+  /** Per-season episode counts — bounds the episode tracker. */
+  seasonShapes: Record<string, SeasonShape[] | null>;
 }
 
 const CONCURRENCY = 12;
@@ -86,6 +88,7 @@ export async function resolveLibraryMedia(items: PosterRequestItem[]): Promise<L
   const nextEpisodes: Record<string, string | null> = {};
   const seriesStatuses: Record<string, string | null> = {};
   const trailers: Record<string, string | null> = {};
+  const seasonShapes: Record<string, SeasonShape[] | null> = {};
 
   for (const [key, ids] of idsByKey) {
     const result = keyToResult.get(key);
@@ -98,10 +101,11 @@ export async function resolveLibraryMedia(items: PosterRequestItem[]): Promise<L
       nextEpisodes[id] = result?.nextEpisodeAirDate ?? null;
       seriesStatuses[id] = result?.seriesStatus ?? null;
       trailers[id] = result?.trailerUrl ?? null;
+      seasonShapes[id] = result?.seasons ?? null;
     }
   }
 
-  return { posters, overviews, platforms, releaseDates, episodeCounts, nextEpisodes, seriesStatuses, trailers };
+  return { posters, overviews, platforms, releaseDates, episodeCounts, nextEpisodes, seriesStatuses, trailers, seasonShapes };
 }
 
 /** @deprecated Use resolveLibraryMedia */
