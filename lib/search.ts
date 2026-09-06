@@ -13,7 +13,7 @@ export function isRecommendationResolved(
   library: UserRating[]
 ): boolean {
   const action = recommendation.user_action.trim().toLowerCase();
-  if (action === "accept" || action === "dismiss") return true;
+  if (action === "accept" || action === "dismiss" || action === "delete") return true;
 
   const normalizedTitle = normalizeTitle(recommendation.title);
   return library.some((entry) => {

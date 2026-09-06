@@ -17,7 +17,7 @@ interface WatchListSectionProps {
   onToast: (toast: ToastMessage) => void;
   onSave: (item: Recommendation, status: "watching") => Promise<void>;
   onDismiss: (id: string, rating: number, reasons: string, comments: string) => void;
-  onDeleteRec: (item: Recommendation) => Promise<void>;
+  onDeleteRec: (id: string) => void;
   onStartSaved: (item: UserRating) => Promise<void>;
   onDismissSaved: (item: UserRating, payload: DismissPayload) => Promise<void>;
   onDeleteSaved: (item: UserRating) => Promise<void>;
@@ -83,12 +83,15 @@ function RecCard({
   badge?: string;
   onSave: (item: Recommendation, status: "watching") => Promise<void>;
   onDismiss: (id: string, rating: number, reasons: string, comments: string) => void;
-  onDelete: (item: Recommendation) => Promise<void>;
+  onDelete: (id: string) => void;
   onToast: (toast: ToastMessage) => void;
 }) {
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackMode, setFeedbackMode] = useState<"dismiss" | "delete" | null>(null);
 
-  async function dismiss(payload: DismissPayload) {
+  // Delete is a soft delete: the row stays (marked user_action "delete") so
+  // the engine keeps the never-repeat exclusion and the why-feedback — a hard
+  // delete would let the same title come back as a future pick.
+  async function resolve(payload: DismissPayload, action: "dismiss" | "delete") {
     const reasons = formatFinishTags(payload.tags);
     const res = await fetch("/api/recommendations", {
       method: "PATCH",
@@ -96,7 +99,7 @@ function RecCard({
       body: JSON.stringify({
         id: item.id,
         fields: {
-          user_action: "dismiss",
+          user_action: action,
           user_rating: payload.rating > 0 ? String(payload.rating) : "",
           user_reasons: reasons,
           user_comments: payload.comments,
@@ -104,11 +107,16 @@ function RecCard({
       }),
     });
     if (!res.ok) {
-      onToast(createToast("error", "Could not dismiss recommendation"));
+      onToast(createToast("error", `Could not ${action} recommendation`));
       throw new Error("Failed");
     }
-    onDismiss(item.id, payload.rating, reasons, payload.comments);
-    onToast(createToast("success", `Dismissed ${item.title} — find it under Watched › Dismissed`));
+    if (action === "delete") {
+      onDelete(item.id);
+      onToast(createToast("success", `Deleted ${item.title}`));
+    } else {
+      onDismiss(item.id, payload.rating, reasons, payload.comments);
+      onToast(createToast("success", `Dismissed ${item.title} — find it under Watched › Dismissed`));
+    }
   }
 
   const description = item.the_hook || item.why_she_will_love_it;
@@ -129,20 +137,21 @@ function RecCard({
             <button type="button" className="btn btn-primary btn-xs" onClick={() => onSave(item, "watching")}>
               Start Watching
             </button>
-            <button type="button" className="btn btn-ghost btn-xs" onClick={() => setFeedbackOpen(true)}>
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => setFeedbackMode("dismiss")}>
               Dismiss
             </button>
-            <button type="button" className="btn btn-ghost btn-xs" onClick={() => void onDelete(item)}>
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => setFeedbackMode("delete")}>
               Delete
             </button>
           </>
         }
       />
-      {feedbackOpen && (
+      {feedbackMode && (
         <DismissModal
           title={item.title}
-          onClose={() => setFeedbackOpen(false)}
-          onComplete={dismiss}
+          mode={feedbackMode}
+          onClose={() => setFeedbackMode(null)}
+          onComplete={(payload) => resolve(payload, feedbackMode)}
         />
       )}
     </>

@@ -90,10 +90,13 @@ export async function buildTasteSummary(): Promise<{
     ),
   ];
 
-  // Dismissed recs with feedback are strong avoid-signal — the why matters,
-  // not just the title exclusion.
+  // Dismissed (or deleted-with-reasons) recs are strong avoid-signal — the
+  // why matters, not just the title exclusion.
   const dismissedFeedback = recommendations
-    .filter((rec) => rec.user_action.trim().toLowerCase() === "dismiss")
+    .filter((rec) => {
+      const action = rec.user_action.trim().toLowerCase();
+      return action === "dismiss" || action === "delete";
+    })
     .slice(-20)
     .map((rec) => ({
       title: rec.title,
@@ -172,8 +175,10 @@ export type RecommendationAudience = "me" | "both";
 
 /** Generate fresh recommendation rows — replaces the external Spark agent's refresh. */
 export async function runRecommendationRefresh(
-  audience: RecommendationAudience = "me"
+  audience: RecommendationAudience = "me",
+  options?: { maxPicks?: number }
 ): Promise<RecommendationRunResult> {
+  const maxPicks = Math.max(1, Math.min(3, options?.maxPicks ?? 3));
   // Stage logging so a hung run shows WHERE it hung in the runtime logs.
   const startedAt = Date.now();
   const mark = (stage: string) =>
@@ -279,8 +284,9 @@ export async function runRecommendationRefresh(
         "You are Brittany's TV/movie recommendation agent. " +
         "You are given candidate pools pulled from TMDB — release dates, US streaming platforms, and " +
         "streamability are already verified, so trust them as-is; no research needed. " +
-        "Pick the 3 titles from the RELEASED candidates that best fit her taste — plus, when one is a " +
-        "genuinely exciting fit, 1 bonus pick from the UPCOMING candidates. " +
+        `Pick the ${maxPicks} title${maxPicks === 1 ? "" : "s"} from the RELEASED candidates that best ` +
+        "fit this audience — plus, when one is a genuinely exciting fit, 1 bonus pick from the " +
+        "UPCOMING candidates. " +
         "HARD RULE: choose ONLY from the candidate lists; never add a title that is not listed. " +
         "Copy title, release_date, platform, and type straight from the candidate entry; set available_now " +
         "to true for RELEASED picks and false for the UPCOMING pick. " +
@@ -368,7 +374,7 @@ export async function runRecommendationRefresh(
       )
       // Watchable-now picks first, then the dated upcoming bonus.
       .sort((a, b) => Number(b.available_now) - Number(a.available_now))
-      .slice(0, 4);
+      .slice(0, maxPicks + 1);
 
     if (kept.length === 0 && drafts.length > 0) {
       // Show WHAT the gates rejected, so a bad run is diagnosable from logs.

@@ -14,7 +14,7 @@ interface RecommendedViewProps {
   onDismissAlert: (id: string, rowIndex: number) => void;
   onDismissRec: (id: string, rating: number, reasons: string, comments: string) => void;
   onSaveRec: (item: Recommendation, status: "watching") => Promise<void>;
-  onDeleteRec: (item: Recommendation) => Promise<void>;
+  onDeleteRec: (id: string) => void;
   onStartSaved: (item: UserRating) => Promise<void>;
   onDismissSaved: (item: UserRating, payload: DismissPayload) => Promise<void>;
   onDeleteSaved: (item: UserRating) => Promise<void>;

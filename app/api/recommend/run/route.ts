@@ -40,9 +40,49 @@ async function run(request: NextRequest, audience: RecommendationAudience) {
   }
 }
 
-/** Vercel cron entry point — solo picks. */
+/** Vercel cron entry point — both lanes: solo picks, then a couple for her + Blake. */
 export async function GET(request: NextRequest) {
-  return run(request, "me");
+  if (!(await isAuthorized(request))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Sequential on purpose: the joint run re-reads the sheet, so it excludes
+  // whatever the solo run just added and can't duplicate it.
+  const outcome: {
+    solo?: { added: number; ids: string[] };
+    both?: { added: number; ids: string[] };
+    soloError?: string;
+    bothError?: string;
+  } = {};
+
+  try {
+    outcome.solo = await runRecommendationRefresh("me");
+  } catch (error) {
+    outcome.soloError = error instanceof Error ? error.message : "Solo run failed";
+    console.error("recommend-run solo lane failed:", outcome.soloError);
+  }
+
+  try {
+    outcome.both = await runRecommendationRefresh("both", { maxPicks: 2 });
+  } catch (error) {
+    outcome.bothError = error instanceof Error ? error.message : "Joint run failed";
+    console.error("recommend-run joint lane failed:", outcome.bothError);
+  }
+
+  invalidateCachedPrefix("recommendations:");
+  invalidateCachedPrefix("bootstrap:");
+
+  const added = (outcome.solo?.added ?? 0) + (outcome.both?.added ?? 0);
+  if (outcome.soloError && outcome.bothError) {
+    return NextResponse.json(
+      { ok: false, error: `${outcome.soloError}; ${outcome.bothError}` },
+      { status: 500 }
+    );
+  }
+  return NextResponse.json(
+    { ok: true, added, ...outcome },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
 
 /** In-app "Fresh picks" button — audience comes from the chooser. */

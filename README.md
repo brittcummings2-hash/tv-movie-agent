@@ -43,7 +43,9 @@ Everything runs inside the app now (the old Gemini Spark workflow is retired):
   candidate pool of recent releases from TMDB (release dates, US platforms,
   and streamability pre-verified — no web search in the loop), and asks Claude
   to pick the 3 best taste fits, appending them to the `recommendations` tab.
-  Runs on a daily cron and on demand via the header **Fresh picks** button.
+  The daily cron runs both lanes — up to 3 solo picks and up to 2 tagged
+  "For you + Blake" — and the header **Fresh picks** button runs either lane
+  on demand.
   New stuff only: candidates must be first released within the last 3 months
   (or be a dated upcoming premiere), and any title that has ever appeared as
   a rec — acted on or not — is permanently excluded from future runs, so
