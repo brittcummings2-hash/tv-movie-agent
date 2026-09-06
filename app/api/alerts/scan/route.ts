@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { mapEpisodeAlerts, mapUserRatings } from "@/lib/mappers";
 import { invalidateCachedPrefix } from "@/lib/sheet-cache";
 import { normalizeTitle } from "@/lib/search";
+import { mapWithConcurrency } from "@/lib/poster-batch";
 import { appendEpisodeAlerts, getSheetRows, type EpisodeAlertSheetEntry } from "@/lib/sheets";
 import { fetchTvEpisodeStatus, resolveTmdbTitle } from "@/lib/tmdb";
 import { SHEET_TABS } from "@/lib/types";
@@ -12,7 +13,8 @@ import {
 } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// The premiere sweep also walks the (larger) Done list — give it headroom.
+export const maxDuration = 300;
 
 /** How far back a drop can be and still produce an alert (daily cron + margin). */
 const LOOKBACK_DAYS = 10;
@@ -63,10 +65,14 @@ export async function GET(request: NextRequest) {
       getSheetRows(SHEET_TABS.EPISODE_ALERTS),
     ]);
 
-    const watchingShows = mapUserRatings(ratingRows).filter((item) => {
+    const library = mapUserRatings(ratingRows);
+    const watchingShows = library.filter((item) => {
       const status = item.watch_status.toLowerCase();
       return status === "watching" || status === "caught_up";
     });
+    // Done shows still get a heads-up when a NEW SEASON premieres — Done
+    // means done-for-now, not deaf-forever. DNF stays silent: she bailed.
+    const doneShows = library.filter((item) => item.watch_status.toLowerCase() === "watched");
     const existingAlerts = mapEpisodeAlerts(alertRows);
 
     const newAlerts: EpisodeAlertSheetEntry[] = [];
@@ -109,6 +115,49 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // New-season premieres for Done shows: only a season she hasn't seen
+    // (past her tracked progress), only its first episode, and never season 1
+    // — a "premiere" of S1 on a finished show is TMDB data noise.
+    const premiereChecks = await mapWithConcurrency(doneShows, 8, async (show) => {
+      const resolved = await resolveTmdbTitle(show.show_title, "tv", {
+        releaseDate: show.release_date,
+        skipPlatform: Boolean(show.platform.trim()),
+      });
+      if (!resolved?.tmdbId || resolved.mediaKind !== "tv") return null;
+
+      const status = await fetchTvEpisodeStatus(resolved.tmdbId);
+      const last = status?.last;
+      if (!last || last.episode !== 1 || last.season < 2) return null;
+      if (daysAgo(last.airDate) > LOOKBACK_DAYS || daysAgo(last.airDate) < 0) return null;
+      if (show.current_season > 0 && last.season <= show.current_season) return null;
+      return { show, last, platform: show.platform.trim() || resolved.platform };
+    });
+
+    for (const check of premiereChecks) {
+      if (!check) continue;
+      const { show, last, platform } = check;
+      const showKey = normalizeTitle(show.show_title);
+      const dedupeKey = `${showKey}|S${last.season}E${last.episode}`;
+      if (seenKeys.has(dedupeKey)) continue;
+      seenKeys.add(dedupeKey);
+
+      const alreadyAlerted = existingAlerts.some(
+        (alert) =>
+          normalizeTitle(alert.show_title) === showKey &&
+          alertCoversEpisode(alert.alert_text, last.season, last.episode)
+      );
+      if (alreadyAlerted) continue;
+
+      const nameLabel = last.name ? ` ('${last.name}')` : "";
+      const platformLabel = platform ? ` on ${platform}` : "";
+      newAlerts.push({
+        show_title: show.show_title,
+        alert_text:
+          `New season! Season ${last.season}, Episode 1${nameLabel} premiered on ` +
+          `${formatDropDate(last.airDate)}${platformLabel}.`,
+      });
+    }
+
     if (newAlerts.length > 0) {
       await appendEpisodeAlerts(newAlerts);
       invalidateCachedPrefix("alerts:");
@@ -117,7 +166,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      scanned: watchingShows.length,
+      scanned: watchingShows.length + doneShows.length,
       added: newAlerts.length,
       alerts: newAlerts,
     });

@@ -23,7 +23,7 @@ export interface LibraryMediaMetadata {
 
 const CONCURRENCY = 12;
 
-async function mapWithConcurrency<T, R>(
+export async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
   fn: (item: T) => Promise<R>
