@@ -25,11 +25,13 @@ const DISMISS_TAGS = [
 
 interface DismissModalProps {
   title: string;
+  /** "delete" removes the card for good (no Dismissed-list entry) but still asks why. */
+  mode?: "dismiss" | "delete";
   onClose: () => void;
   onComplete: (payload: DismissPayload) => Promise<void>;
 }
 
-export function DismissModal({ title, onClose, onComplete }: DismissModalProps) {
+export function DismissModal({ title, mode = "dismiss", onClose, onComplete }: DismissModalProps) {
   const [rating, setRating] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [comments, setComments] = useState("");
@@ -75,11 +77,12 @@ export function DismissModal({ title, onClose, onComplete }: DismissModalProps) 
         aria-labelledby="dismiss-title"
       >
         <h2 id="dismiss-title" className="modal-title">
-          Not watching {title}?
+          {mode === "delete" ? `Deleting ${title}?` : `Not watching ${title}?`}
         </h2>
         <p className="modal-copy">
-          Optional — rate it and tap why, so future picks learn what to skip. It
-          moves to your Dismissed list on the Watched tab (restore it anytime).
+          {mode === "delete"
+            ? "Optional — tap why before it goes, so future picks learn what to skip. Deleted picks don't appear in your Dismissed list and won't be recommended again."
+            : "Optional — rate it and tap why, so future picks learn what to skip. It moves to your Dismissed list on the Watched tab (restore it anytime)."}
         </p>
         <form onSubmit={handleSubmit}>
           <div className="form-field finish-rating-field finish-rating-field--first">
@@ -123,7 +126,7 @@ export function DismissModal({ title, onClose, onComplete }: DismissModalProps) 
               Cancel
             </button>
             <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-              {saving ? "Saving…" : "Dismiss"}
+              {saving ? "Saving…" : mode === "delete" ? "Delete" : "Dismiss"}
             </button>
           </div>
         </form>
