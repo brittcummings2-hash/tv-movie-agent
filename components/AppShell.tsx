@@ -68,6 +68,7 @@ async function fetchLibraryMedia(items: ReturnType<typeof buildPosterRequests>) 
     nextEpisodes?: Record<string, string | null>;
     seriesStatuses?: Record<string, string | null>;
     trailers?: Record<string, string | null>;
+    seasonShapes?: Record<string, { season: number; episodes: number }[] | null>;
   };
   return {
     posters: body.posters ?? {},
@@ -78,6 +79,7 @@ async function fetchLibraryMedia(items: ReturnType<typeof buildPosterRequests>) 
     nextEpisodes: body.nextEpisodes ?? {},
     seriesStatuses: body.seriesStatuses ?? {},
     trailers: body.trailers ?? {},
+    seasonShapes: body.seasonShapes ?? {},
   };
 }
 
@@ -91,6 +93,7 @@ function mergeLibraryMedia(
     nextEpisodes: Record<string, string | null>;
     seriesStatuses: Record<string, string | null>;
     trailers: Record<string, string | null>;
+    seasonShapes: Record<string, { season: number; episodes: number }[] | null>;
   },
   setLibrary: Dispatch<SetStateAction<UserRating[]>>,
   setRecommendations: Dispatch<SetStateAction<Recommendation[]>>,
@@ -109,6 +112,7 @@ function mergeLibraryMedia(
         next_episode_air_date: media.nextEpisodes[key] ?? item.next_episode_air_date ?? null,
         series_status: media.seriesStatuses[key] ?? item.series_status ?? null,
         trailerUrl: media.trailers[key] ?? item.trailerUrl ?? null,
+        seasons: media.seasonShapes[key] ?? item.seasons ?? null,
       };
     })
   );
