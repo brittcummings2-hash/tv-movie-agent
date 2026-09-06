@@ -54,7 +54,10 @@ Everything runs inside the app now (the old Gemini Spark workflow is retired):
   polling.
 - **New-episode alerts** — `/api/alerts/scan` (daily cron) checks TMDB air
   dates for every show you're watching and appends `episode_alerts` rows
-  deterministically. No LLM involved.
+  deterministically. No LLM involved. Shows marked Done also get an alert
+  when a NEW SEASON premieres (episode drops within a show's current season
+  stay silent for them); checking that alert off moves the show back to
+  Watching, pointed at the new season.
 
 The `spark_queue` and `settings` tabs in the sheet are no longer used and can
 be deleted once the old Workspace Spark agent is turned off.

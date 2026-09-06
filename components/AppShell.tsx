@@ -517,9 +517,48 @@ export function AppShell() {
       });
       if (!res.ok) throw new Error("Failed");
 
-      // Watching the new episode means she's caught up — move the show to the
-      // "Caught Up · Waiting for Next Episode" group (unless it's already there).
-      if (item && item.watch_status.toLowerCase() !== "caught_up") {
+      const status = item?.watch_status.toLowerCase();
+      const premiereSeason = alert.alert_text.startsWith("New season!")
+        ? Number(alert.alert_text.match(/Season\s+(\d+)/i)?.[1] ?? 0)
+        : 0;
+
+      if (item && status === "watched" && premiereSeason > 0) {
+        // A new-season premiere on a Done show — checking it off means
+        // "back for more": return it to Watching, pointed at the premiere.
+        const patchRes = await fetch("/api/watched", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: item.id,
+            fields: {
+              watch_status: "watching",
+              current_season: premiereSeason,
+              current_episode: 1,
+            },
+          }),
+        });
+        if (!patchRes.ok) throw new Error("Failed");
+        setLibrary((prev) =>
+          prev.map((row) =>
+            row.id === item.id
+              ? {
+                  ...row,
+                  watch_status: "watching",
+                  current_season: premiereSeason,
+                  current_episode: 1,
+                }
+              : row
+          )
+        );
+        handleToast(
+          createToast(
+            "success",
+            `${alert.show_title} → back on Watching for Season ${premiereSeason}`
+          )
+        );
+      } else if (item && status !== "caught_up") {
+        // Watching the new episode means she's caught up — move the show to the
+        // "Caught Up · Waiting for Next Episode" group (unless it's already there).
         const savedItem = await persistLibraryItem(item, { watch_status: "caught_up" });
         setLibrary((prev) => prev.map((row) => (row.id === item.id ? savedItem : row)));
         handleToast(createToast("success", `${alert.show_title} → Caught up, waiting for next episode`));
